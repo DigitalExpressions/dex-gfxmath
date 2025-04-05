@@ -25,36 +25,18 @@
 #endif
 
 #include "vectorclass.h"
-#include <chrono>
+
+//Various defines to uncomment
+//#define _JUCE_
+
+//#define _SEQUENCE_
+//#define _VEC2_
+//#define _VEC3_
+//#define _VEC4_
+//#define _MAT4_
 
 template <typename>
 constexpr bool always_false = false;
-
-#ifndef _MM_TRANSPOSE4_PS
-#define _MM_TRANSPOSE4_PS(row0, row1, row2, row3) { \
-    auto tmp0 = _mm_shuffle_ps((row0), (row1), 0x44); \
-    auto tmp2 = _mm_shuffle_ps((row0), (row1), 0xEE); \
-    auto tmp1 = _mm_shuffle_ps((row2), (row3), 0x44); \
-    auto tmp3 = _mm_shuffle_ps((row2), (row3), 0xEE); \
-    (row0) = _mm_shuffle_ps(tmp0, tmp1, 0x88); \
-    (row1) = _mm_shuffle_ps(tmp0, tmp1, 0xDD); \
-    (row2) = _mm_shuffle_ps(tmp2, tmp3, 0x88); \
-    (row3) = _mm_shuffle_ps(tmp2, tmp3, 0xDD); \
-}
-#endif
-
-#ifndef _MM_TRANSPOSE4_PD
-#define _MM_TRANSPOSE4_PD(row0, row1, row2, row3) { \
-    auto tmp0 = _mm256_shuffle_pd((row0), (row1), 0x0); \
-    auto tmp2 = _mm256_shuffle_pd((row0), (row1), 0xF); \
-    auto tmp1 = _mm256_shuffle_pd((row2), (row3), 0x0); \
-    auto tmp3 = _mm256_shuffle_pd((row2), (row3), 0xF); \
-    (row0) = _mm256_permute2f128_pd(tmp0, tmp1, 0x20); \
-    (row1) = _mm256_permute2f128_pd(tmp2, tmp3, 0x20); \
-    (row2) = _mm256_permute2f128_pd(tmp0, tmp1, 0x31); \
-    (row3) = _mm256_permute2f128_pd(tmp2, tmp3, 0x31); \
-}
-#endif
 
 // horizontal_and. Returns true if all bits in mask are 1
 static inline bool horizontal_and(Vec4fb const a, int mask) {
@@ -76,6 +58,7 @@ static inline bool horizontal_or(Vec8fb const a, int mask) {
     return (_mm256_movemask_ps(a) & mask) != 0;
 }
 
+#if defined(_SEQUENCE_)
 // ----------------------------------------------------------------------------
 // 
 // Some sequence code inspired by The Art of C++ / Sequences
@@ -221,12 +204,14 @@ namespace seq
     constexpr auto seqToArray = impl::seq_to_array<Seq>::ar;
 }
 
+
 template <typename First, typename... Tail>
 struct FirstType { using type = First; };
 template <typename First, typename... Tail>
 using FirstType_t = typename FirstType<First, Tail...>::type;
 
 // ----------------------------------------------------------------------------
+#endif //_SEQUENCE_
 
 template <typename T = float> constexpr auto E = T(2.71828182845904523536);
 template <typename T = float> constexpr auto HalfPi = T(1.57079632679489661923);
@@ -679,10 +664,13 @@ public:
     constexpr vec2(T v) : x(v), y(v) {}
     constexpr vec2(T x, T y) : x(x), y(y) {}
     constexpr vec2(const vec2<Scalar>& v) : x(v.x), y(v.y) {}
-    constexpr vec2(const Point<Scalar>& v) : x(v.x), y(v.y) {}
     constexpr vec2(const Value& v) : value(v) {}
     template <typename FP>
     constexpr vec2(typename std::enable_if_t<!std::is_same_v<T, FP>&& std::is_floating_point_v<T>&& std::is_floating_point_v<FP>, const vec2<FP>&> v) : x(v.x), y(v.y) {}
+
+#if defined(JUCE)
+    constexpr vec2(const Point<Scalar>& v) : x(v.x), y(v.y) {}
+#endif
 
     template <typename AS>
     forcedinline operator vec2<AS>() const noexcept { return vec2<AS>{ AS(x), AS(y) }; }
@@ -852,9 +840,11 @@ public:
     constexpr vec3(typename std::enable_if_t<!std::is_same_v<T, FP> && std::is_floating_point_v<T> && std::is_floating_point_v<FP>, const vec3<FP>&> v) : x(v.x), y(v.y), z(v.z) {}
     constexpr vec3(const vec4<Scalar>& v) : x(v.x), y(v.y), z(v.z) {}
     constexpr vec3(const Value& v) : value(v) {}
-    constexpr vec3(const Colour c) : vec3(c.getFloatRed(), c.getFloatGreen(), c.getFloatBlue()) {}
 
+#if defined(JUCE)
+    constexpr vec3(const Colour c) : vec3(c.getFloatRed(), c.getFloatGreen(), c.getFloatBlue()) {}
     forcedinline operator Colour() const { return Colour::fromFloatRGBA(r, g, b, 1.0f); }
+#endif
 
     forcedinline void insert(int index, const vec3<Scalar>& value)
     {
@@ -1082,8 +1072,11 @@ public:
     template <typename FP>
     constexpr vec4(typename std::enable_if_t<!std::is_same_v<T, FP>&& std::is_floating_point_v<T>&& std::is_floating_point_v<FP>, const vec4<FP>&> v) : x(v.x), y(v.y), z(v.z), w(v.w) {}
     constexpr vec4(const T* v) { vcl.load_a(v); }
+
+#if defined(JUCE)
     constexpr vec4(const Colour c) : vcl(c.getFloatRed(), c.getFloatGreen(), c.getFloatBlue(), c.getFloatAlpha()) {}
     forcedinline operator Colour() const noexcept { return Colour::fromFloatRGBA(r, g, b, a); }
+#endif
 
     forcedinline vec4 withW(T ww) const noexcept { auto v = vec4(*this); v.vcl.insert(3, ww); return v; }
 
@@ -2206,7 +2199,7 @@ namespace vectorN_impl
         return s < sizeof...(VectorSizes) ? vs[s] : 0;
     }
 
-
+#if defined(_SEQUENCE_)
     template <typename T, typename Seq>
     struct vectorN_from_vectors;
     template <typename T, size_t... Vectors>
@@ -2217,8 +2210,10 @@ namespace vectorN_impl
         static constexpr auto n = tupleVectors<Size, VectorSizes...>();
         using type = vectorN_from_vectors<T, seq::modify_t<tupleVectorScalars<Size, VectorSizes...>, std::make_index_sequence<n>>>::type;
     };
+#endif
 }
 
+#if defined(_SEQUENCE_)
 template <typename T, size_t Size, size_t... VectorSizes>
 using vecNT = typename vectorN_impl::vectorN_type<T, Size, VectorSizes...>::type;
 template <typename T, size_t Size>
@@ -2227,7 +2222,7 @@ template <size_t Size>
 using vecNf = vecNT<float, Size, 8, 4, 1>;
 template <size_t Size>
 using vecNd = vecNT<double, Size, 4, 1>;
-
+#endif
 
 
 template <typename T>
@@ -2559,9 +2554,28 @@ public:
     forcedinline Matrix4& transpose()
     {
         if constexpr (std::is_same_v<T, float>)
-            _MM_TRANSPOSE4_PS(col0, col1, col2, col3);
+        {
+            auto tmp0 = _mm_shuffle_ps((col0), (col1), 0x44); \
+                auto tmp2 = _mm_shuffle_ps((col0), (col1), 0xEE); \
+                auto tmp1 = _mm_shuffle_ps((col2), (col3), 0x44); \
+                auto tmp3 = _mm_shuffle_ps((col2), (col3), 0xEE); \
+                (col0) = _mm_shuffle_ps(tmp0, tmp1, 0x88); \
+                (col1) = _mm_shuffle_ps(tmp0, tmp1, 0xDD); \
+                (col2) = _mm_shuffle_ps(tmp2, tmp3, 0x88); \
+                (col3) = _mm_shuffle_ps(tmp2, tmp3, 0xDD); \
+        }
+
         if constexpr (std::is_same_v<T, double>)
-            _MM_TRANSPOSE4_PD(col0, col1, col2, col3);
+        {
+            auto tmp0 = _mm256_shuffle_pd((col0), (col1), 0x0); \
+                auto tmp2 = _mm256_shuffle_pd((col0), (col1), 0xF); \
+                auto tmp1 = _mm256_shuffle_pd((col2), (col3), 0x0); \
+                auto tmp3 = _mm256_shuffle_pd((col2), (col3), 0xF); \
+                (col0) = _mm256_permute2f128_pd(tmp0, tmp1, 0x20); \
+                (col1) = _mm256_permute2f128_pd(tmp2, tmp3, 0x20); \
+                (col2) = _mm256_permute2f128_pd(tmp0, tmp1, 0x31); \
+                (col3) = _mm256_permute2f128_pd(tmp2, tmp3, 0x31); \
+        }
         return *this;
     }
 

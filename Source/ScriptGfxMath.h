@@ -10,7 +10,8 @@
 
 #pragma once
 #include "ScriptEngine.h"
-#include "Raytracer/GfxMath.h"
+#include "GfxMath.h"
+//FW #include "Raytracer/GfxMath.h"
 
 ASE_GLOBAL_DECL_NAMESPACE("Float");
 
