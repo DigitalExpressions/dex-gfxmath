@@ -9,7 +9,7 @@
 */
 
 #pragma once
-#include "ScriptEngine.h"
+//#include "ScriptEngine.h"
 #include "../GfxMath.h"
 
 ASE_GLOBAL_DECL_NAMESPACE("Float");
@@ -54,8 +54,11 @@ ASE_PROPERTY_GLOBAL("const float epsilon", epsilon);
 
 ASE_END_GLOBAL_DECL_NAMESPACE;
 
+#if defined(_VEC4_)
 class ScriptVec4;
+#endif
 
+#if defined(_VEC3_)
 class ScriptVec3 :
     public ASE_ValueClass<ScriptVec3, asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS>
 {
@@ -67,8 +70,12 @@ public:
 
     ASE_CONSTRUCTOR("(const vec3& v)", const ScriptVec3&);
     ScriptVec3(const ScriptVec3& v) : value(v.value) {}
+
+#if defined(_VEC4_)
     ASE_CONSTRUCTOR("(const vec4& v)", const ScriptVec4&);
     ScriptVec3(const ScriptVec4& v);
+#endif
+
     ASE_CONSTRUCTOR("(float v)", float);
     ScriptVec3(float v) : value(v) {}
     ASE_CONSTRUCTOR("(float x, float y, float z)", float, float, float);
@@ -370,8 +377,10 @@ protected:
 };
 
 ASE_TYPE_DECLARATION(ScriptVec3Array);
+#endif //_VEC3_
 
 
+#if defined(_VEC4_)
 class ScriptVec4 : 
     public ASE_ValueClass<ScriptVec4>
 {
@@ -384,8 +393,10 @@ public:
     ~ScriptVec4() = default;
     ASE_CONSTRUCTOR("()");
     ScriptVec4() = default;
+#if defined(_VEC3_)
     ASE_CONSTRUCTOR("(const vec3& v)", const ScriptVec3&);
     ScriptVec4(const ScriptVec3& v) { *vec() = v.value; }
+#endif
     ASE_CONSTRUCTOR("(const vec4& v)", const ScriptVec4&);
     ScriptVec4(const ScriptVec4& v) { *vec() = *v.vec(); }
     ASE_CONSTRUCTOR("(float v)", float);
@@ -517,7 +528,9 @@ protected:
 };
 
 ASE_TYPE_DECLARATION(ScriptVec4);
+#endif //_VEC4_
 
+#if defined(_VEC3_) && defined(_VEC4_)
 class ScriptMatrix4 : 
     public ASE_ValueClass<ScriptMatrix4>
 {
@@ -668,6 +681,9 @@ private:
 };
 
 ASE_TYPE_DECLARATION(ScriptMatrix4);
+#endif //Matrix4
 
-// Reverse dependent 
+// Reverse dependent
+#if defined(_VEC3_) && defined(_VEC4_)
 inline ScriptVec3::ScriptVec3(const ScriptVec4& v) : value(v.vec()->xyz()) {}
+#endif

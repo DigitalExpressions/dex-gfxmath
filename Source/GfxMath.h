@@ -41,12 +41,13 @@
 
 //Various defines to uncomment
 //#define _JUCE_
-
-//#define _SEQUENCE_
+//#define _VECN_
 //#define _VEC2_
-//#define _VEC3_
-//#define _VEC4_
-//#define _MAT4_
+#define _VEC3_
+#define _VEC4_
+//#define _RGBA_
+//#define _ARGB_ Why both RGBA and ARGB
+//#define _MAP2D_
 
 template <typename>
 constexpr bool always_false = false;
@@ -71,9 +72,7 @@ static inline bool horizontal_or(Vec8fb const a, int mask) {
     return (_mm256_movemask_ps(a) & mask) != 0;
 }
 
-#if defined(_SEQUENCE_)
-// ----------------------------------------------------------------------------
-// 
+#if defined(_VECN_)
 // Some sequence code inspired by The Art of C++ / Sequences
 // https://github.com/taocpp/sequences
 
@@ -222,9 +221,7 @@ template <typename First, typename... Tail>
 struct FirstType { using type = First; };
 template <typename First, typename... Tail>
 using FirstType_t = typename FirstType<First, Tail...>::type;
-
-// ----------------------------------------------------------------------------
-#endif //_SEQUENCE_
+#endif //_VECN_
 
 template <typename T = float> constexpr auto E = T(2.71828182845904523536);
 template <typename T = float> constexpr auto HalfPi = T(1.57079632679489661923);
@@ -638,26 +635,51 @@ forcedinline T approx_sqrt(T number)
 }
 
 // Forward template declarations
-template <typename T> class vec2;
-template <typename T> class vec3;
-template <typename T> class vec4;
-template <typename T> class ARGB;
 template <typename T> static forcedinline T hash11(T p);
+
+#if defined(_VEC2_)
+template <typename T> class vec2;
 template <typename T> static forcedinline T hash12(const vec2<T> p);
-template <typename T> static forcedinline T hash13(const vec3<T> p);
 template <typename T> static forcedinline vec2<T> hash21(T p);
 template <typename T> static forcedinline vec2<T> hash22(const vec2<T> p);
-template <typename T> static forcedinline vec2<T> hash23(const vec3<T> p);
+#endif
+
+#if defined(_VEC3_)
+template <typename T> class vec3;
+template <typename T> static forcedinline T hash13(const vec3<T> p);
 template <typename T> static forcedinline vec3<T> hash31(T p);
-template <typename T> static forcedinline vec3<T> hash32(const vec2<T> p);
 template <typename T> static forcedinline vec3<T> hash33(const vec3<T> p);
+#endif
+
+#if defined(_VEC4_)
+template <typename T> class vec4;
 template <typename T> static forcedinline vec4<T> hash41(T p);
-template <typename T> static forcedinline vec4<T> hash42(const vec2<T> p);
-template <typename T> static forcedinline vec4<T> hash43(const vec3<T> p);
 template <typename T> static forcedinline vec4<T> hash44(const vec4<T> p);
+#endif
 
-// ----------------------------------------------------------------------------
+#if defined(_VEC2_) && defined(_VEC3_)
+template <typename T> static forcedinline vec2<T> hash23(const vec3<T> p);
+template <typename T> static forcedinline vec3<T> hash32(const vec2<T> p);
+#endif
 
+#if defined(_VEC2_) && defined(_VEC4_)
+template <typename T> static forcedinline vec4<T> hash42(const vec2<T> p);
+#endif
+
+#if defined(_VEC3_) && defined(_VEC4_)
+template <typename T> static forcedinline vec4<T> hash43(const vec3<T> p);
+#endif
+
+#if defined(_ARGB_)
+template <typename T> class ARGB;
+#endif
+
+/*
+* ----------------------------------------------------------------
+* vec2 class
+* ----------------------------------------------------------------
+*/
+#if defined(_VEC2_)
 template <typename T>
 class vec2
 {
@@ -681,7 +703,7 @@ public:
     template <typename FP>
     constexpr vec2(typename std::enable_if_t<!std::is_same_v<T, FP>&& std::is_floating_point_v<T>&& std::is_floating_point_v<FP>, const vec2<FP>&> v) : x(v.x), y(v.y) {}
 
-#if defined(JUCE)
+#if defined(_JUCE_)
     constexpr vec2(const Point<Scalar>& v) : x(v.x), y(v.y) {}
 #endif
 
@@ -825,9 +847,14 @@ public:
             return T::elementtype();
     }
 };
+#endif //_VEC2_
 
-// ----------------------------------------------------------------------------
-
+/*
+* ----------------------------------------------------------------
+* vec3 class
+* ----------------------------------------------------------------
+*/
+#if defined(_VEC3_)
 template <typename T>
 class vec3
 {
@@ -840,21 +867,26 @@ public:
         struct { T x, y, z; };
         struct { T u, v, w; };
         struct { T r, g, b; };
+        T array[3];
         Value value;
     };
 
     constexpr vec3() : x(0.0f), y(0.0f), z(0.0f) {}
     constexpr vec3(T v) : x(v), y(v), z(v) {}
     constexpr vec3(T x, T y, T z) : x(x), y(y), z(z) {}
+#if defined(_VEC2_)
     constexpr vec3(T x, const vec2<T> v2) : x(x), y(v2.x), z(v2.y) {}
     constexpr vec3(const vec2<T> v2, T z = {}) : x(v2.x), y(v2.y), z(z) {}
+#endif
     constexpr vec3(const vec3<Scalar>& v) : x(v.x), y(v.y), z(v.z) {}
     template <typename FP>
     constexpr vec3(typename std::enable_if_t<!std::is_same_v<T, FP> && std::is_floating_point_v<T> && std::is_floating_point_v<FP>, const vec3<FP>&> v) : x(v.x), y(v.y), z(v.z) {}
+#if defined(_VEC4_)
     constexpr vec3(const vec4<Scalar>& v) : x(v.x), y(v.y), z(v.z) {}
+#endif
     constexpr vec3(const Value& v) : value(v) {}
 
-#if defined(JUCE)
+#if defined(_JUCE_)
     constexpr vec3(const Colour c) : vec3(c.getFloatRed(), c.getFloatGreen(), c.getFloatBlue()) {}
     forcedinline operator Colour() const { return Colour::fromFloatRGBA(r, g, b, 1.0f); }
 #endif
@@ -974,6 +1006,7 @@ public:
         return (vec3{ x, y, z } - 0.5f).normalized();
     }
 
+#if defined(_VEC2_)
     forcedinline vec2<T> xx() const noexcept { return { x, x }; }       forcedinline vec2<T> rr() const noexcept { return { r, r }; }       forcedinline vec2<T> uu() const noexcept { return { x, x }; }
     forcedinline vec2<T> xy() const noexcept { return { x, y }; }       forcedinline vec2<T> rg() const noexcept { return { r, g }; }       forcedinline vec2<T> uv() const noexcept { return { x, y }; }
     forcedinline vec2<T> xz() const noexcept { return { x, z }; }       forcedinline vec2<T> rb() const noexcept { return { r, b }; }       forcedinline vec2<T> uw() const noexcept { return { x, z }; }
@@ -983,6 +1016,7 @@ public:
     forcedinline vec2<T> zx() const noexcept { return { z, x }; }       forcedinline vec2<T> br() const noexcept { return { b, r }; }       forcedinline vec2<T> wu() const noexcept { return { z, x }; }
     forcedinline vec2<T> zy() const noexcept { return { z, y }; }       forcedinline vec2<T> bg() const noexcept { return { b, g }; }       forcedinline vec2<T> wv() const noexcept { return { z, y }; }
     forcedinline vec2<T> zz() const noexcept { return { z, z }; }       forcedinline vec2<T> bb() const noexcept { return { b, b }; }       forcedinline vec2<T> ww() const noexcept { return { z, z }; }
+#endif
 
     forcedinline vec3<T> xxx() const noexcept { return { x, x, x }; }   forcedinline vec3<T> rrr() const noexcept { return { r, r, r }; }   forcedinline vec3<T> uuu() const noexcept { return { x, x, x }; }
     forcedinline vec3<T> xxy() const noexcept { return { x, x, y }; }   forcedinline vec3<T> rrg() const noexcept { return { r, r, g }; }   forcedinline vec3<T> uuv() const noexcept { return { x, x, y }; }
@@ -1016,8 +1050,10 @@ public:
     forcedinline T get() const noexcept { jassert(A0 < size()); return value._[A0]; }
     template <int A0>
     forcedinline void set(T a0) const noexcept { jassert(A0 < size()); value._[A0] = a0; }
+#if defined(_VEC2_)
     template <int A0, int A1>
     forcedinline vec2<T> get() const noexcept { jassert(max(A0, A1) < size()); return { value._[A0], value._[A1] }; }
+#endif
     template <int A0, int A1>
     forcedinline void set(T a0, T a1) const noexcept { jassert(max(A0, A1) < size()); value._[A0] = a0; value._[A1] = a1; }
     template <int A0, int A1, int A2>
@@ -1035,9 +1071,14 @@ public:
             return T::elementtype();
     }
 };
+#endif //_VEC3_
 
-// ----------------------------------------------------------------------------
-
+/*
+* ----------------------------------------------------------------
+* vec4 class
+* ----------------------------------------------------------------
+*/
+#if defined(_VEC4_)
 template <typename T>
 class vec4
 {
@@ -1050,6 +1091,7 @@ public:
         struct { T x, y, z, w; };
         struct { T r, g, b, a; };
         Value value;
+        T array[4];
         Vector_t<T, 4> vcl;
         struct
         {
@@ -1073,12 +1115,16 @@ public:
     constexpr vec4() : vcl(0) {}
     constexpr vec4(T v) : vcl(v) {}
     constexpr vec4(T x, T y, T z, T w = {}) : vcl(x, y, z, w) {}
+#if defined(_VEC2_)
     constexpr vec4(T x, T y, const vec2<T> v2) : vcl(x, y, v2.x, v2.y) {}
     constexpr vec4(T x, const vec2<T> v2, T w) : vcl(x, v2.x, v2.y, w) {}
     constexpr vec4(const vec2<T> v2, T z = {}, T w = {}) : vcl(v2.x, v2.y, z, w) {}
     constexpr vec4(const vec2<T> v1, const vec2<T> v2) : vcl(v1.x, v1.y, v2.x, v2.y) {}
+#endif
+#if defined(_VEC3_)
     constexpr vec4(T x, const vec3<T> v3) : vcl(x, v3.x, v3.y, v3.z) {}
     constexpr vec4(const vec3<T> v3, T w = {}) : vcl(v3.x, v3.y, v3.z, w) {}
+#endif
     constexpr vec4(const Vector_t<T, 4> v) : vcl(v) {}
     constexpr vec4(const vec4& v) : vcl(v.vcl) {}
     constexpr vec4(const Value& v) : value(v) {}
@@ -1086,7 +1132,7 @@ public:
     constexpr vec4(typename std::enable_if_t<!std::is_same_v<T, FP>&& std::is_floating_point_v<T>&& std::is_floating_point_v<FP>, const vec4<FP>&> v) : x(v.x), y(v.y), z(v.z), w(v.w) {}
     constexpr vec4(const T* v) { vcl.load_a(v); }
 
-#if defined(JUCE)
+#if defined(_JUCE_)
     constexpr vec4(const Colour c) : vcl(c.getFloatRed(), c.getFloatGreen(), c.getFloatBlue(), c.getFloatAlpha()) {}
     forcedinline operator Colour() const noexcept { return Colour::fromFloatRGBA(r, g, b, a); }
 #endif
@@ -1200,6 +1246,7 @@ public:
         return vec4{ fast_rand<Vector_t<T, 4>>(&seed) - 0.5f }.normalized();
     }
 
+#if defined(_VEC2_)
     forcedinline vec2<T> xx() const noexcept { return { x, x }; }           forcedinline vec2<T> aa() const noexcept { return { a, a }; }
     forcedinline vec2<T> xy() const noexcept { return { x, y }; }           forcedinline vec2<T> ar() const noexcept { return { a, r }; }
     forcedinline vec2<T> xz() const noexcept { return { x, z }; }           forcedinline vec2<T> ag() const noexcept { return { a, g }; }
@@ -1216,7 +1263,8 @@ public:
     forcedinline vec2<T> wy() const noexcept { return { w, y }; }           forcedinline vec2<T> br() const noexcept { return { b, r }; }
     forcedinline vec2<T> wz() const noexcept { return { w, z }; }           forcedinline vec2<T> bg() const noexcept { return { b, g }; }
     forcedinline vec2<T> ww() const noexcept { return { w, w }; }           forcedinline vec2<T> bb() const noexcept { return { b, b }; }
-
+#endif
+#if defined(_VEC3_)
     forcedinline vec3<T> xxx() const noexcept { return { x, x, x }; }       forcedinline vec3<T> aaa() const noexcept { return { a, a, a }; }
     forcedinline vec3<T> xxy() const noexcept { return { x, x, y }; }       forcedinline vec3<T> aar() const noexcept { return { a, a, r }; }
     forcedinline vec3<T> xxz() const noexcept { return { x, x, z }; }       forcedinline vec3<T> aag() const noexcept { return { a, a, g }; }
@@ -1273,7 +1321,7 @@ public:
     forcedinline vec3<T> wzy() const noexcept { return { w, z, y }; }       forcedinline vec3<T> bgr() const noexcept { return { b, g, r }; }
     forcedinline vec3<T> wzz() const noexcept { return { w, z, z }; }       forcedinline vec3<T> bgg() const noexcept { return { b, g, g }; }
     forcedinline vec3<T> wzw() const noexcept { return { w, z, w }; }       forcedinline vec3<T> bgb() const noexcept { return { b, g, b }; }
-
+#endif
     forcedinline vec4<T> xxxx() const noexcept { return { x, x, x, x }; }   forcedinline vec4<T> aaaa() const noexcept { return { a, a, a, a }; }
     forcedinline vec4<T> xxxy() const noexcept { return { x, x, x, y }; }   forcedinline vec4<T> aaar() const noexcept { return { a, a, a, r }; }
     forcedinline vec4<T> xxxz() const noexcept { return { x, x, x, z }; }   forcedinline vec4<T> aaag() const noexcept { return { a, a, a, g }; }
@@ -1538,12 +1586,16 @@ public:
     forcedinline T get() const noexcept { jassert(A0 < size()); return value._[A0]; }
     template <int A0> 
     forcedinline void set(T a0) const noexcept { jassert(A0 < size()); value._[A0] = a0; }
+#if defined(_VEC2_)
     template <int A0, int A1> 
     forcedinline vec2<T> get() const noexcept { jassert(max(A0, A1) < size()); return { value._[A0], value._[A1] }; }
+#endif
     template <int A0, int A1> 
     forcedinline void set(T a0, T a1) const noexcept { jassert(max(A0, A1) < size()); value._[A0] = a0; value._[A1] = a1; }
+#if defined(_VEC3_)
     template <int A0, int A1, int A2> 
     forcedinline vec3<T> get() const noexcept { jassert(max(A0, A1, A2) < size()); return { value._[A0], value._[A1], value._[A2] }; }
+#endif
     template <int A0, int A1, int A2> 
     forcedinline void set(T a0, T a1, T a2) const noexcept { jassert(max(A0, A1, A2) < size()); value._[A0] = a0; value._[A1] = a1; value._[A2] = a2; }
     template <int A0, int A1, int A2, int A3> 
@@ -1561,7 +1613,9 @@ public:
             return T::elementtype();
     }
 };
+#endif //_VEC4_
 
+#if defined(_VEC2_)
 template <typename T>
 forcedinline vec2<T> select(const BoolType<T> s, const vec2<T>& a, const vec2<T>& b)
 {
@@ -1572,36 +1626,7 @@ forcedinline vec2<T> select(const BoolType<T> s, const vec2<T>& a, const vec2<T>
 }
 
 template <typename T>
-forcedinline vec3<T> select(const BoolType<T> s, const vec3<T>& a, const vec3<T>& b)
-{
-    vec3<T> r;
-    r.x = select(s, a.x, b.x);
-    r.y = select(s, a.y, b.y);
-    r.z = select(s, a.z, b.z);
-    return r;
-}
-
-template <typename T>
-forcedinline vec4<T> select(const BoolType<T> s, const vec4<T>& a, const vec4<T>& b)
-{
-    vec4<T> r;
-    r.x = select(s, a.x, b.x);
-    r.y = select(s, a.y, b.y);
-    r.z = select(s, a.z, b.z);
-    r.w = select(s, a.w, b.w);
-    return r;
-}
-
-template <typename T>
-forcedinline ARGB<T> select(const BoolType<Vector_t<T, 4>> s, const ARGB<T>& a, const ARGB<T>& b)
-{
-    return select(s, a.vcl, b.vcl);
-}
-
-template <typename T>
 forcedinline vec2<T> if_changeSign(const BoolType<T> s, const vec2<T>& a) { return select(s, -a, a); }
-template <typename T>
-forcedinline vec3<T> if_changeSign(const BoolType<T> s, const vec3<T>& a) { return select(s, -a, a); }
 
 template <typename T>
 forcedinline const vec2<T> operator+(T a, const vec2<T>& b) noexcept { return { a + b.x, a + b.y }; }
@@ -1617,6 +1642,44 @@ forcedinline const vec2<T> operator/(T a, const vec2<T>& b) noexcept
 }
 
 template <typename T>
+forcedinline const vec2<T> min(const vec2<T>& a, const vec2<T>& b) noexcept { return { min(a.x, b.x), min(a.y, b.y) }; }
+template <typename T>
+forcedinline const vec2<T> min(const vec2<T>& a, T b) noexcept { return { min(a.x, b), min(a.y, b) }; }
+template <typename T>
+forcedinline const T horizontal_min(const vec2<T> a) noexcept { return min(a.x, a.y); }
+
+template <typename T>
+forcedinline const vec2<T> max(const vec2<T>& a, const vec2<T>& b) noexcept { return { max(a.x, b.x), max(a.y, b.y) }; }
+template <typename T>
+forcedinline const vec2<T> max(const vec2<T>& a, T b) noexcept { return { max(a.x, b), max(a.y, b) }; }
+template <typename T>
+forcedinline const T horizontal_max(const vec2<T>& a) noexcept { return max(a.x, a.y); }
+
+template <typename T>
+forcedinline const T add(const vec2<T>& a) noexcept { return a.x + a.y; }
+
+template <typename T>
+forcedinline const vec2<T> max1(const vec2<T>& a) noexcept
+{
+    return { T(a.x >= a.y), T(a.y < a.x) };
+}
+#endif //_VEC2_
+
+#if defined(_VEC3_)
+template <typename T>
+forcedinline vec3<T> select(const BoolType<T> s, const vec3<T>& a, const vec3<T>& b)
+{
+    vec3<T> r;
+    r.x = select(s, a.x, b.x);
+    r.y = select(s, a.y, b.y);
+    r.z = select(s, a.z, b.z);
+    return r;
+}
+
+template <typename T>
+forcedinline vec3<T> if_changeSign(const BoolType<T> s, const vec3<T>& a) { return select(s, -a, a); }
+
+template <typename T>
 forcedinline const vec3<T> operator+(T a, const vec3<T>& b) noexcept { return { a + b.x, a + b.y, a + b.z }; }
 template <typename T>
 forcedinline const vec3<T> operator-(T a, const vec3<T>& b) noexcept { return { a - b.x, a - b.y, a - b.z }; }
@@ -1628,6 +1691,47 @@ forcedinline const vec3<T> operator/(T a, const vec3<T>& b) noexcept
     auto m = T(1) / std::numeric_limits<Scalar_t<T>>::epsilon();
     return { select(b.x != 0, a / b.x, m), select(b.y != 0, a / b.y, m), select(b.z != 0, a / b.z, m) };
 }
+
+template <typename T>
+forcedinline const vec3<T> min(const vec3<T>& a, const vec3<T>& b) noexcept { return { min(a.x, b.x), min(a.y, b.y), min(a.z, b.z) }; }
+template <typename T>
+forcedinline const vec3<T> min(const vec3<T>& a, T b) noexcept { return { min(a.x, b), min(a.y, b), min(a.z, b) }; }
+template <typename T>
+forcedinline const T horizontal_min(const vec3<T>& a) noexcept { return min(a.x, a.y, a.z); }
+
+template <typename T>
+forcedinline const vec3<T> max(const vec3<T>& a, const vec3<T>& b) noexcept { return { max(a.x, b.x), max(a.y, b.y), max(a.z, b.z) }; }
+template <typename T>
+forcedinline const vec3<T> max(const vec3<T>& a, T b) noexcept { return { max(a.x, b), max(a.y, b), max(a.z, b) }; }
+template <typename T>
+forcedinline const T horizontal_max(const vec3<T>& a) noexcept { return max(a.x, a.y, a.z); }
+
+template <typename T>
+forcedinline const T add(const vec3<T>& a) noexcept { return a.x + a.y + a.z; }
+
+template <typename T>
+forcedinline const vec3<T> max1(const vec3<T>& a) noexcept
+{
+    auto m = horizontal_max(a);
+    auto bx = a.x == m, by = a.y == m, bz = a.z == m;
+    return { T(bx), T(by && !bx), T(bz && !(bx || by)) };
+}
+#endif //_VEC3_
+
+#if defined(_VEC4_)
+template <typename T>
+forcedinline vec4<T> select(const BoolType<T> s, const vec4<T>& a, const vec4<T>& b)
+{
+    vec4<T> r;
+    r.x = select(s, a.x, b.x);
+    r.y = select(s, a.y, b.y);
+    r.z = select(s, a.z, b.z);
+    r.w = select(s, a.w, b.w);
+    return r;
+}
+
+template <typename T>
+forcedinline vec4<T> if_changeSign(const BoolType<T> s, const vec4<T>& a) { return select(s, -a, a); }
 
 template <typename T>
 forcedinline const vec4<T> operator+(T a, const vec4<T>& b) noexcept { return { a + b.x, a + b.y, a + b.z, a + b.w }; }
@@ -1643,6 +1747,48 @@ forcedinline const vec4<T> operator/(T a, const vec4<T>& b) noexcept
 }
 
 template <typename T>
+forcedinline const vec4<T> min(const vec4<T>& a, const vec4<T>& b) noexcept { return { min(a.x, b.x), min(a.y, b.y), min(a.z, b.z), min(a.w, b.w) }; }
+template <typename T>
+forcedinline const vec4<T> min(const vec4<T>& a, T b) noexcept { return { min(a.x, b), min(a.y, b), min(a.z, b), min(a.w, b) }; }
+template <typename T>
+forcedinline const T horizontal_min(const vec4<T>& a) noexcept { return horizontal_min(a.vcl); }
+template <typename T>
+forcedinline const T horizontal_min3(const vec4<T>& a) noexcept { return horizontal_min(a.withW(FLT_MAX).vcl); }
+
+template <typename T>
+forcedinline const vec4<T> max(const vec4<T>& a, const vec4<T>& b) noexcept { return { max(a.vcl, b.vcl) }; }
+template <typename T>
+forcedinline const vec4<T> max(const vec4<T>& a, T b) noexcept { return { max(a.vcl, b) }; }
+template <typename T>
+forcedinline const T horizontal_max(const vec4<T>& a) noexcept { return horizontal_max(a.vcl); }
+template <typename T>
+forcedinline const T horizontal_max3(const vec4<T>& a) noexcept { return horizontal_max(a.withW(-FLT_MAX).vcl); }
+
+template <typename T>
+forcedinline const T horizontal_add(const vec4<T>& a) noexcept { return horizontal_add(a.vcl); }
+template <typename T>
+forcedinline const T horizontal_add3(const vec4<T>& a) noexcept { return horizontal_add(a.withW(0).vcl); }
+
+template <typename T>
+forcedinline const vec4<T> max1(const vec4<T>& a) noexcept
+{
+    auto m = horizontal_max(a);
+    auto bx = a.x == m, by = a.y == m, bz = a.z == m, bw = a.w == m;
+    return { T(bx), T(by && !bx), T(bz && !(bx || by)), T(bw && !(bx || by || bz)) };
+}
+#endif //_VEC4_
+
+#if defined(_ARGB_)
+template <typename T>
+forcedinline ARGB<T> select(const BoolType<Vector_t<T, 4>> s, const ARGB<T>& a, const ARGB<T>& b)
+{
+    return select(s, a.vcl, b.vcl);
+}
+
+template <typename T>
+forcedinline vec4<T> if_changeSign(const BoolType<T> s, const ARGB<T>& a) { return select(s, -a, a); }
+
+template <typename T>
 forcedinline const ARGB<T> operator+(T a, const ARGB<T>& b) noexcept { return a + b.vcl; }
 template <typename T>
 forcedinline const ARGB<T> operator-(T a, const ARGB<T>& b) noexcept { return a - b.vcl; }
@@ -1656,29 +1802,6 @@ forcedinline const ARGB<T> operator/(T a, const ARGB<T>& b) noexcept
 }
 
 template <typename T>
-forcedinline const vec2<T> min(const vec2<T>& a, const vec2<T>& b) noexcept { return { min(a.x, b.x), min(a.y, b.y) }; }
-template <typename T>
-forcedinline const vec2<T> min(const vec2<T>& a, T b) noexcept { return { min(a.x, b), min(a.y, b) }; }
-template <typename T>
-forcedinline const T horizontal_min(const vec2<T> a) noexcept { return min(a.x, a.y); }
-
-template <typename T>
-forcedinline const vec3<T> min(const vec3<T>& a, const vec3<T>& b) noexcept { return { min(a.x, b.x), min(a.y, b.y), min(a.z, b.z) }; }
-template <typename T>
-forcedinline const vec3<T> min(const vec3<T>& a, T b) noexcept { return { min(a.x, b), min(a.y, b), min(a.z, b) }; }
-template <typename T>
-forcedinline const T horizontal_min(const vec3<T>& a) noexcept { return min(a.x, a.y, a.z); }
-
-template <typename T>
-forcedinline const vec4<T> min(const vec4<T>& a, const vec4<T>& b) noexcept { return { min(a.x, b.x), min(a.y, b.y), min(a.z, b.z), min(a.w, b.w) }; }
-template <typename T>
-forcedinline const vec4<T> min(const vec4<T>& a, T b) noexcept { return { min(a.x, b), min(a.y, b), min(a.z, b), min(a.w, b) }; }
-template <typename T>
-forcedinline const T horizontal_min(const vec4<T>& a) noexcept { return horizontal_min(a.vcl); }
-template <typename T>
-forcedinline const T horizontal_min3(const vec4<T>& a) noexcept { return horizontal_min(a.withW(FLT_MAX).vcl); }
-
-template <typename T>
 forcedinline const ARGB<T> min(const ARGB<T>& a, const ARGB<T>& b) noexcept { return min(a.vcl, b.vcl); }
 template <typename T>
 forcedinline const ARGB<T> min(const ARGB<T>& a, T b) noexcept { return min(a.vcl, b); }
@@ -1686,154 +1809,39 @@ template <typename T>
 forcedinline const T horizontal_min(const ARGB<T>& a) noexcept { return horizontal_min(a.vcl); }
 
 template <typename T>
-forcedinline const vec2<T> max(const vec2<T>& a, const vec2<T>& b) noexcept { return { max(a.x, b.x), max(a.y, b.y) }; }
-template <typename T>
-forcedinline const vec2<T> max(const vec2<T>& a, T b) noexcept { return { max(a.x, b), max(a.y, b) }; }
-template <typename T>
-forcedinline const T horizontal_max(const vec2<T>& a) noexcept { return max(a.x, a.y); }
-
-template <typename T>
-forcedinline const vec3<T> max(const vec3<T>& a, const vec3<T>& b) noexcept { return { max(a.x, b.x), max(a.y, b.y), max(a.z, b.z) }; }
-template <typename T>
-forcedinline const vec3<T> max(const vec3<T>& a, T b) noexcept { return { max(a.x, b), max(a.y, b), max(a.z, b) }; }
-template <typename T>
-forcedinline const T horizontal_max(const vec3<T>& a) noexcept { return max(a.x, a.y, a.z); }
-
-template <typename T>
-forcedinline const vec4<T> max(const vec4<T>& a, const vec4<T>& b) noexcept { return { max(a.vcl, b.vcl) }; }
-template <typename T>
-forcedinline const vec4<T> max(const vec4<T>& a, T b) noexcept { return { max(a.vcl, b) }; }
-template <typename T>
-forcedinline const T horizontal_max(const vec4<T>& a) noexcept { return horizontal_max(a.vcl); }
-template <typename T>
-forcedinline const T horizontal_max3(const vec4<T>& a) noexcept { return horizontal_max(a.withW(-FLT_MAX).vcl); }
-
-template <typename T>
 forcedinline const ARGB<T> max(const ARGB<T>& a, const ARGB<T>& b) noexcept { return max(a.vcl, b.vcl); }
 template <typename T>
 forcedinline const ARGB<T> max(const ARGB<T>& a, T b) noexcept { return max(a.vcl, b); }
 template <typename T>
 forcedinline const T horizontal_max(const ARGB<T>& a) noexcept { return horizontal_max(a.vcl); }
+#endif //_ARGB_
 
 template <typename T, std::enable_if_t<std::is_arithmetic_v<T>>>
 forcedinline const T add(const T a) noexcept { return a; }
-template <typename T>
-forcedinline const T add(const vec2<T>& a) noexcept { return a.x + a.y; }
-template <typename T>
-forcedinline const T add(const vec3<T>& a) noexcept { return a.x + a.y + a.z; }
-template <typename T>
-forcedinline const T horizontal_add(const vec4<T>& a) noexcept { return horizontal_add(a.vcl); }
-template <typename T>
-forcedinline const T horizontal_add3(const vec4<T>& a) noexcept { return horizontal_add(a.withW(0).vcl); }
-
-
-
-template <typename T>
-forcedinline const vec2<T> max1(const vec2<T>& a) noexcept 
-{ 
-    return { T(a.x >= a.y), T(a.y < a.x) };
-}
-
-template <typename T>
-forcedinline const vec3<T> max1(const vec3<T>& a) noexcept 
-{ 
-    auto m = horizontal_max(a); 
-    auto bx = a.x == m, by = a.y == m, bz = a.z == m; 
-    return { T(bx), T(by && !bx), T(bz && !(bx || by)) }; 
-}
-template <typename T>
-forcedinline const vec4<T> max1(const vec4<T>& a) noexcept 
-{
-    auto m = horizontal_max(a);
-    auto bx = a.x == m, by = a.y == m, bz = a.z == m, bw = a.w == m; 
-    return { T(bx), T(by && !bx), T(bz && !(bx || by)), T(bw && !(bx || by || bz)) };
-}
-
-template <typename T>
-forcedinline const vec2<T> abs(const vec2<T>& a) noexcept { return { abs(a.x), abs(a.y) }; }
-template <typename T>
-forcedinline const vec3<T> abs(const vec3<T>& a) noexcept { return { abs(a.x), abs(a.y), abs(a.z) }; }
-template <typename T>
-forcedinline const vec4<T> abs(const vec4<T>& a) noexcept { return { abs(a.x), abs(a.y), abs(a.z), abs(a.w) }; }
-template <typename T>
-forcedinline const ARGB<T> abs(const ARGB<T>& a) noexcept { return abs(a.vcl); }
-
-template <typename T>
-forcedinline const vec2<T> exp(const vec2<T>& a) noexcept { return { exp(a.x), exp(a.y) }; }
-template <typename T>
-forcedinline const vec3<T> exp(const vec3<T>& a) noexcept { return { exp(a.x), exp(a.y), exp(a.z) }; }
-template <typename T>
-forcedinline const vec4<T> exp(const vec4<T>& a) noexcept { return { exp(a.x), exp(a.y), exp(a.z), exp(a.w) }; }
-template <typename T>
-forcedinline const ARGB<T> exp(const ARGB<T>& a) noexcept { return exp(a.vcl); }
-
-template <typename T>
-forcedinline const vec2<T> sqrt(const vec2<T>& a) noexcept { return { sqrt(a.x), sqrt(a.y) }; }
-template <typename T>
-forcedinline const vec3<T> sqrt(const vec3<T>& a) noexcept { return { sqrt(a.x), sqrt(a.y), sqrt(a.z) }; }
-template <typename T>
-forcedinline const vec4<T> sqrt(const vec4<T>& a) noexcept { return { sqrt(a.x), sqrt(a.y), sqrt(a.z), sqrt(a.w) }; }
-template <typename T>
-forcedinline const ARGB<T> sqrt(const ARGB<T>& a) noexcept { return sqrt(a.vcl); }
-
-template <typename T>
-forcedinline const vec2<T> sin(const vec2<T>& a) noexcept { return { sin(a.x), sin(a.y) }; }
-template <typename T>
-forcedinline const vec3<T> sin(const vec3<T>& a) noexcept { return { sin(a.x), sin(a.y), sin(a.z) }; }
-template <typename T>
-forcedinline const vec4<T> sin(const vec4<T>& a) noexcept { return { sin(a.x), sin(a.y), sin(a.z), sin(a.w) }; }
-template <typename T>
-forcedinline const ARGB<T> sin(const ARGB<T>& a) noexcept { return sin(a.vcl); }
-
-template <typename T>
-forcedinline const vec2<T> cos(const vec2<T>& a) noexcept { return { cos(a.x), cos(a.y) }; }
-template <typename T>
-forcedinline const vec3<T> cos(const vec3<T>& a) noexcept { return { cos(a.x), cos(a.y), cos(a.z) }; }
-template <typename T>
-forcedinline const vec4<T> cos(const vec4<T>& a) noexcept { return { cos(a.x), cos(a.y), cos(a.z), cos(a.w) }; }
-template <typename T>
-forcedinline const ARGB<T> cos(const ARGB<T>& a) noexcept { return cos(a.vcl); }
-
-template <typename T>
-forcedinline const vec2<T> approx_sqrt(const vec2<T>& a) noexcept { return { approx_sqrt(a.x), approx_sqrt(a.y) }; }
-template <typename T>
-forcedinline const vec3<T> approx_sqrt(const vec3<T>& a) noexcept { return { approx_sqrt(a.x), approx_sqrt(a.y), approx_sqrt(a.z) }; }
-template <typename T>
-forcedinline const vec4<T> approx_sqrt(const vec4<T>& a) noexcept { return { approx_sqrt(a.x), approx_sqrt(a.y), approx_sqrt(a.z), approx_sqrt(a.w) }; }
-template <typename T>
-forcedinline const ARGB<T> approx_sqrt(const ARGB<T>& a) noexcept { return approx_sqrt(a.vcl); }
-
-static forcedinline float sign(float v) noexcept { *(uint32_t*)&v = (uint32_t(v < 0) << 31) | 0x3f800000U; return v; }
-static forcedinline double sign(double v) noexcept { *(uint64_t*)&v = (uint64_t(v < 0) << 63) | 0x3ff0000000000000UL; return v; }
 
 template <typename T>
 forcedinline const T sign(const T& v) noexcept { return select(v < 0, -1, 1); }
+
+#if defined(_VEC2_)
+template <typename T>
+forcedinline const vec2<T> abs(const vec2<T>& a) noexcept { return { abs(a.x), abs(a.y) }; }
+template <typename T>
+forcedinline const vec2<T> exp(const vec2<T>& a) noexcept { return { exp(a.x), exp(a.y) }; }
+template <typename T>
+forcedinline const vec2<T> sqrt(const vec2<T>& a) noexcept { return { sqrt(a.x), sqrt(a.y) }; }
+template <typename T>
+forcedinline const vec2<T> sin(const vec2<T>& a) noexcept { return { sin(a.x), sin(a.y) }; }
+template <typename T>
+forcedinline const vec2<T> cos(const vec2<T>& a) noexcept { return { cos(a.x), cos(a.y) }; }
+template <typename T>
+forcedinline const vec2<T> approx_sqrt(const vec2<T>& a) noexcept { return { approx_sqrt(a.x), approx_sqrt(a.y) }; }
+
 template <typename T>
 forcedinline const vec2<T> sign(const vec2<T>& a) noexcept { return { select(a.x < 0, -1, 1), select(a.y < 0, -1, 1) }; }
 template <>
 forcedinline const vec2<float> sign(const vec2<float>& a) noexcept { return vec2<float>{ sign(a.x), sign(a.y) }; }
 template <>
 forcedinline const vec2<double> sign(const vec2<double>& a) noexcept { return vec2<double>{ sign(a.x), sign(a.y) }; }
-
-template <typename T>
-forcedinline const vec3<T> sign(const vec3<T>& a) noexcept { return { select(a.x < 0, -1, 1), select(a.y < 0, -1, 1), select(a.z < 0, -1, 1) }; }
-template <>
-forcedinline const vec3<float> sign(const vec3<float>& a) noexcept { return vec3<float>{ sign(a.x), sign(a.y), sign(a.z) }; }
-template <>
-forcedinline const vec3<double> sign(const vec3<double>& a) noexcept { return vec3<double>{ sign(a.x), sign(a.y), sign(a.z) }; }
-
-template <typename T>
-forcedinline const vec4<T> sign(const vec4<T>& a) noexcept { return { select(a.x < 0, -1, 1), select(a.y < 0, -1, 1), select(a.z < 0, -1, 1), select(a.w < 0, -1, 1) }; }
-template <>
-forcedinline const vec4<float> sign(const vec4<float>& a) noexcept { return vec4<float>{ sign(a.x), sign(a.y), sign(a.z), sign(a.w) }; }
-template <>
-forcedinline const vec4<double> sign(const vec4<double>& a) noexcept { return vec4<double>{ sign(a.x), sign(a.y), sign(a.z), sign(a.w) }; }
-
-template <typename T>
-forcedinline const ARGB<T> sign(const ARGB<T>& a) noexcept { return select(a.vcl < 0, -1, 1); }
-
-template <typename T>
-forcedinline const T step(T a, T b) noexcept { return T(b >= a); }
 
 template <typename T>
 forcedinline const vec2<T> step(const vec2<T>& a, const vec2<T>& b) noexcept { return { T(select(b.x < a.x, 0, 1)), T(select(b.y < a.y, 0, 1)) }; }
@@ -1843,11 +1851,79 @@ template <>
 forcedinline const vec2<double> step(const vec2<double>& a, const vec2<double>& b) noexcept { return { double(b.x >= a.x), double(b.y >= a.y) }; }
 
 template <typename T>
+forcedinline const vec2<T> pow(const vec2<T>& a, const vec2<T>& b) noexcept { return { pow(a.x, b.x), pow(a.y, b.y) }; }
+template <typename T>
+forcedinline const vec2<T> pow(const vec2<T>& a, T b) noexcept { return { pow(a.x, b), pow(a.y, b) }; }
+
+template <typename T>
+forcedinline const vec2<T> trunc(const vec2<T>& a) noexcept { return { trunc(a.x), trunc(a.y) }; }
+template <typename T>
+forcedinline const vec2<T> floor(const vec2<T>& a) noexcept { return { floor(a.x), floor(a.y) }; }
+template <typename T>
+forcedinline const vec2<T> ceil(const vec2<T>& a) noexcept { return { ceil(a.x), ceil(a.y) }; }
+#endif //_VEC2_
+
+#if defined(_VEC3_)
+template <typename T>
+forcedinline const vec3<T> abs(const vec3<T>& a) noexcept { return { abs(a.x), abs(a.y), abs(a.z) }; }
+template <typename T>
+forcedinline const vec3<T> exp(const vec3<T>& a) noexcept { return { exp(a.x), exp(a.y), exp(a.z) }; }
+template <typename T>
+forcedinline const vec3<T> sqrt(const vec3<T>& a) noexcept { return { sqrt(a.x), sqrt(a.y), sqrt(a.z) }; }
+template <typename T>
+forcedinline const vec3<T> sin(const vec3<T>& a) noexcept { return { sin(a.x), sin(a.y), sin(a.z) }; }
+template <typename T>
+forcedinline const vec3<T> cos(const vec3<T>& a) noexcept { return { cos(a.x), cos(a.y), cos(a.z) }; }
+template <typename T>
+forcedinline const vec3<T> approx_sqrt(const vec3<T>& a) noexcept { return { approx_sqrt(a.x), approx_sqrt(a.y), approx_sqrt(a.z) }; }
+
+template <typename T>
+forcedinline const vec3<T> sign(const vec3<T>& a) noexcept { return { select(a.x < 0, -1, 1), select(a.y < 0, -1, 1), select(a.z < 0, -1, 1) }; }
+template <>
+forcedinline const vec3<float> sign(const vec3<float>& a) noexcept { return vec3<float>{ sign(a.x), sign(a.y), sign(a.z) }; }
+template <>
+forcedinline const vec3<double> sign(const vec3<double>& a) noexcept { return vec3<double>{ sign(a.x), sign(a.y), sign(a.z) }; }
+
+template <typename T>
 forcedinline const vec3<T> step(const vec3<T>& a, const vec3<T>& b) noexcept { return { T(select(b.x < a.x, 0, 1)), T(select(b.y < a.y, 0, 1)), T(select(b.z < a.z, 0, 1)) }; }
 template <>
 forcedinline const vec3<float> step(const vec3<float>& a, const vec3<float>& b) noexcept { return { float(b.x >= a.x), float(b.y >= a.y), float(b.z >= a.z) }; }
 template <>
 forcedinline const vec3<double> step(const vec3<double>& a, const vec3<double>& b) noexcept { return { double(b.x >= a.x), double(b.y >= a.y), double(b.z >= a.z) }; }
+
+template <typename T>
+forcedinline const vec3<T> pow(const vec3<T>& a, const vec3<T>& b) noexcept { return { pow(a.x, b.x), pow(a.y, b.y), pow(a.z, b.z) }; }
+template <typename T>
+forcedinline const vec3<T> pow(const vec3<T>& a, T b) noexcept { return { pow(a.x, b), pow(a.y, b), pow(a.z, b) }; }
+
+template <typename T>
+forcedinline const vec3<T> trunc(const vec3<T>& a) noexcept { return { trunc(a.x), trunc(a.y), trunc(a.z) }; }
+template <typename T>
+forcedinline const vec3<T> floor(const vec3<T>& a) noexcept { return { floor(a.x), floor(a.y), floor(a.z) }; }
+template <typename T>
+forcedinline const vec3<T> ceil(const vec3<T>& a) noexcept { return { ceil(a.x), ceil(a.y), ceil(a.z) }; }
+#endif //_VEC3_
+
+#if defined(_VEC4_)
+template <typename T>
+forcedinline const vec4<T> abs(const vec4<T>& a) noexcept { return { abs(a.x), abs(a.y), abs(a.z), abs(a.w) }; }
+template <typename T>
+forcedinline const vec4<T> exp(const vec4<T>& a) noexcept { return { exp(a.x), exp(a.y), exp(a.z), exp(a.w) }; }
+template <typename T>
+forcedinline const vec4<T> sqrt(const vec4<T>& a) noexcept { return { sqrt(a.x), sqrt(a.y), sqrt(a.z), sqrt(a.w) }; }
+template <typename T>
+forcedinline const vec4<T> sin(const vec4<T>& a) noexcept { return { sin(a.x), sin(a.y), sin(a.z), sin(a.w) }; }
+template <typename T>
+forcedinline const vec4<T> cos(const vec4<T>& a) noexcept { return { cos(a.x), cos(a.y), cos(a.z), cos(a.w) }; }
+template <typename T>
+forcedinline const vec4<T> approx_sqrt(const vec4<T>& a) noexcept { return { approx_sqrt(a.x), approx_sqrt(a.y), approx_sqrt(a.z), approx_sqrt(a.w) }; }
+
+template <typename T>
+forcedinline const vec4<T> sign(const vec4<T>& a) noexcept { return { select(a.x < 0, -1, 1), select(a.y < 0, -1, 1), select(a.z < 0, -1, 1), select(a.w < 0, -1, 1) }; }
+template <>
+forcedinline const vec4<float> sign(const vec4<float>& a) noexcept { return vec4<float>{ sign(a.x), sign(a.y), sign(a.z), sign(a.w) }; }
+template <>
+forcedinline const vec4<double> sign(const vec4<double>& a) noexcept { return vec4<double>{ sign(a.x), sign(a.y), sign(a.z), sign(a.w) }; }
 
 template <typename T>
 forcedinline const vec4<T> step(const vec4<T>& a, const vec4<T>& b) noexcept { return { T(select(b.x < a.x, 0, 1)), T(select(b.y < a.y, 0, 1)), T(select(b.z < a.z, 0, 1)), T(select(b.w < a.w, 0, 1)) }; }
@@ -1857,69 +1933,59 @@ template <>
 forcedinline const vec4<double> step(const vec4<double>& a, const vec4<double>& b) noexcept { return { double(b.x >= a.x), double(b.y >= a.y), double(b.z >= a.z), double(b.w >= a.w) }; }
 
 template <typename T>
-forcedinline const ARGB<T> step(const ARGB<T>& a, const ARGB<T>& b) noexcept { return select(b.vcl < a.vcl, 0, 1); }
-
-template <typename T>
-forcedinline const vec2<T> pow(const vec2<T>& a, const vec2<T>& b) noexcept { return { pow(a.x, b.x), pow(a.y, b.y) }; }
-template <typename T>
-forcedinline const vec2<T> pow(const vec2<T>& a, T b) noexcept { return { pow(a.x, b), pow(a.y, b) }; }
-
-template <typename T>
-forcedinline const vec3<T> pow(const vec3<T>& a, const vec3<T>& b) noexcept { return { pow(a.x, b.x), pow(a.y, b.y), pow(a.z, b.z) }; }
-template <typename T>
-forcedinline const vec3<T> pow(const vec3<T>& a, T b) noexcept { return { pow(a.x, b), pow(a.y, b), pow(a.z, b) }; }
-
-template <typename T>
 forcedinline const vec4<T> pow(const vec4<T>& a, const vec4<T>& b) noexcept { return { pow(a.x, b.x), pow(a.y, b.y), pow(a.z, b.z), pow(a.w, b.w) }; }
 template <typename T>
 forcedinline const vec4<T> pow(const vec4<T>& a, T b) noexcept { return { pow(a.x, b), pow(a.y, b), pow(a.z, b), pow(a.w, b) }; }
 
 template <typename T>
-forcedinline const ARGB<T> pow(const ARGB<T>& a, const ARGB<T>& b) noexcept { return pow(a.vcl, b.vcl); }
-template <typename T>
-forcedinline const ARGB<T> pow(const ARGB<T>& a, T b) noexcept { return pow(a.vcl, b); }
-
-template <typename T>
-forcedinline const vec2<T> trunc(const vec2<T>& a) noexcept { return { trunc(a.x), trunc(a.y) }; }
-template <typename T>
-forcedinline const vec3<T> trunc(const vec3<T>& a) noexcept { return { trunc(a.x), trunc(a.y), trunc(a.z) }; }
-template <typename T>
 forcedinline const vec4<T> trunc(const vec4<T>& a) noexcept { return { trunc(a.x), trunc(a.y), trunc(a.z), trunc(a.w) }; }
-template <typename T>
-forcedinline const ARGB<T> trunc(const ARGB<T>& a) noexcept { return truncate(a.vcl); }
-
-template <typename T>
-forcedinline const vec2<T> floor(const vec2<T>& a) noexcept { return { floor(a.x), floor(a.y) }; }
-template <typename T>
-forcedinline const vec3<T> floor(const vec3<T>& a) noexcept { return { floor(a.x), floor(a.y), floor(a.z) }; }
 template <typename T>
 forcedinline const vec4<T> floor(const vec4<T>& a) noexcept { return { floor(a.x), floor(a.y), floor(a.z), floor(a.w) }; }
 template <typename T>
-forcedinline const ARGB<T> floor(const ARGB<T>& a) noexcept { return floor(a.vcl); }
-
-template <typename T>
-forcedinline const vec2<T> ceil(const vec2<T>& a) noexcept { return { ceil(a.x), ceil(a.y) }; }
-template <typename T>
-forcedinline const vec3<T> ceil(const vec3<T>& a) noexcept { return { ceil(a.x), ceil(a.y), ceil(a.z) }; }
-template <typename T>
 forcedinline const vec4<T> ceil(const vec4<T>& a) noexcept { return { ceil(a.x), ceil(a.y), ceil(a.z), ceil(a.w) }; }
+#endif //_VEC4_
+
+#if defined(_ARGB_)
+template <typename T>
+forcedinline const ARGB<T> abs(const ARGB<T>& a) noexcept { return abs(a.vcl); }
+template <typename T>
+forcedinline const ARGB<T> exp(const ARGB<T>& a) noexcept { return exp(a.vcl); }
+template <typename T>
+forcedinline const ARGB<T> sqrt(const ARGB<T>& a) noexcept { return sqrt(a.vcl); }
+template <typename T>
+forcedinline const ARGB<T> sin(const ARGB<T>& a) noexcept { return sin(a.vcl); }
+template <typename T>
+forcedinline const ARGB<T> cos(const ARGB<T>& a) noexcept { return cos(a.vcl); }
+template <typename T>
+forcedinline const ARGB<T> approx_sqrt(const ARGB<T>& a) noexcept { return approx_sqrt(a.vcl); }
+template <typename T>
+forcedinline const ARGB<T> sign(const ARGB<T>& a) noexcept { return select(a.vcl < 0, -1, 1); }
+template <typename T>
+forcedinline const ARGB<T> step(const ARGB<T>& a, const ARGB<T>& b) noexcept { return select(b.vcl < a.vcl, 0, 1); }
+template <typename T>
+forcedinline const ARGB<T> pow(const ARGB<T>& a, const ARGB<T>& b) noexcept { return pow(a.vcl, b.vcl); }
+template <typename T>
+forcedinline const ARGB<T> pow(const ARGB<T>& a, T b) noexcept { return pow(a.vcl, b); }
+template <typename T>
+forcedinline const ARGB<T> trunc(const ARGB<T>& a) noexcept { return truncate(a.vcl); }
+template <typename T>
+forcedinline const ARGB<T> floor(const ARGB<T>& a) noexcept { return floor(a.vcl); }
 template <typename T>
 forcedinline const ARGB<T> ceil(const ARGB<T>& a) noexcept { return ceil(a.vcl); }
+#endif //_ARGB_
+
+template <typename T>
+forcedinline const T step(T a, T b) noexcept { return T(b >= a); }
 
 template <typename T>
 forcedinline const T modulo(const T& a, const T& b) {  T t = a / b; return t - floor(t); }
 
+static forcedinline float sign(float v) noexcept { *(uint32_t*)&v = (uint32_t(v < 0) << 31) | 0x3f800000U; return v; }
+static forcedinline double sign(double v) noexcept { *(uint64_t*)&v = (uint64_t(v < 0) << 63) | 0x3ff0000000000000UL; return v; }
+
+#if defined(_VEC2_)
 template <int N> using vec2fN = vec2<Float_t<N>>;
 template <int N> using vec2dN = vec2<Double_t<N>>;
-template <int N> using vec3fN = vec3<Float_t<N>>;
-template <int N> using vec3dN = vec3<Double_t<N>>;
-template <int N> using vec4fN = vec4<Float_t<N>>;
-template <int N> using vec4dN = vec4<Double_t<N>>;
-
-template <int N> using RGBfN = vec3<Float_t<N>>;
-template <int N> using RGBdN = vec3<Double_t<N>>;
-template <int N> using RGBAfN = vec4<Float_t<N>>;
-template <int N> using RGBAdN = vec4<Double_t<N>>;
 
 using vec2f = vec2fN<1>;
 using vec2f4 = vec2fN<4>;
@@ -1928,6 +1994,21 @@ using vec2d = vec2dN<1>;
 using vec2d4 = vec2dN<4>;
 using vec2d8 = vec2dN<8>;
 
+template <> struct Scalar<vec2f> { using type = float; };
+template <> struct Scalar<vec2f4> { using type = float; };
+template <> struct Scalar<vec2f8> { using type = float; };
+template <> struct Scalar<vec2d> { using type = double; };
+template <> struct Scalar<vec2d4> { using type = double; };
+template <> struct Scalar<vec2d8> { using type = double; };
+
+template <typename T, int N> struct V2_TN { using type = vec2<Vector_t<T, N>>; };
+template <typename T, int N> using V2_t = typename V2_TN<T, N>::type;
+#endif //_VEC2_
+
+#if defined(_VEC3_)
+template <int N> using vec3fN = vec3<Float_t<N>>;
+template <int N> using vec3dN = vec3<Double_t<N>>;
+
 using vec3f = vec3fN<1>;
 using vec3f4 = vec3fN<4>;
 using vec3f8 = vec3fN<8>;
@@ -1935,12 +2016,54 @@ using vec3d = vec3dN<1>;
 using vec3d4 = vec3dN<4>;
 using vec3d8 = vec3dN<8>;
 
+template <> struct Scalar<vec3f> { using type = float; };
+template <> struct Scalar<vec3f4> { using type = float; };
+template <> struct Scalar<vec3f8> { using type = float; };
+template <> struct Scalar<vec3d> { using type = double; };
+template <> struct Scalar<vec3d4> { using type = double; };
+template <> struct Scalar<vec3d8> { using type = double; };
+
+forcedinline vec3f toFloat(vec3f v) noexcept { return v; }
+forcedinline vec3f toFloat(vec3d v) noexcept { return vec3f{ float(v.x), float(v.y), float(v.z) }; }
+forcedinline vec3d toDouble(vec3f v) noexcept { return vec3d{ v.x, v.y, v.z }; }
+forcedinline vec3d toDouble(vec3d v) noexcept { return v; }
+
+template <typename T, int N> struct V3_TN { using type = vec3<Vector_t<T, N>>; };
+template <typename T, int N> using V3_t = typename V3_TN<T, N>::type;
+#endif //_VEC3_
+
+#if defined(_VEC4_)
+template <int N> using vec4fN = vec4<Float_t<N>>;
+template <int N> using vec4dN = vec4<Double_t<N>>;
+
 using vec4f = vec4fN<1>;
 using vec4f4 = vec4fN<4>;
 using vec4f8 = vec4fN<8>;
 using vec4d = vec4dN<1>;
 using vec4d4 = vec4dN<4>;
 using vec4d8 = vec4dN<8>;
+
+template <> struct Scalar<vec4f> { using type = float; };
+template <> struct Scalar<vec4f4> { using type = float; };
+template <> struct Scalar<vec4f8> { using type = float; };
+template <> struct Scalar<vec4d> { using type = double; };
+template <> struct Scalar<vec4d4> { using type = double; };
+template <> struct Scalar<vec4d8> { using type = double; };
+
+forcedinline vec4f toFloat(vec4f v) noexcept { return v; }
+forcedinline vec4f toFloat(vec4d v) noexcept { return vec4f{ to_float(v.vcl) }; }
+forcedinline vec4d toDouble(vec4f v) noexcept { return vec4d{ to_double(v.vcl) }; }
+forcedinline vec4d toDouble(vec4d v) noexcept { return v; }
+
+template <typename T, int N> struct V4_TN { using type = vec4<Vector_t<T, N>>; };
+template <typename T, int N> using V4_t = typename V4_TN<T, N>::type;
+#endif //_VEC4_
+
+#if defined(_RGBA_)
+template <int N> using RGBfN = vec3<Float_t<N>>;
+template <int N> using RGBdN = vec3<Double_t<N>>;
+template <int N> using RGBAfN = vec4<Float_t<N>>;
+template <int N> using RGBAdN = vec4<Double_t<N>>;
 
 using RGBf = RGBfN<1>;
 using RGBf4 = RGBfN<4>;
@@ -1956,24 +2079,9 @@ using RGBAd = RGBAdN<1>;
 using RGBAd4 = RGBAdN<4>;
 using RGBAd8 = RGBAdN<8>;
 
-template <> struct Scalar<vec2f> { using type = float; };
-template <> struct Scalar<vec2f4> { using type = float; };
-template <> struct Scalar<vec2f8> { using type = float; };
-template <> struct Scalar<vec2d> { using type = double; };
-template <> struct Scalar<vec2d4> { using type = double; };
-template <> struct Scalar<vec2d8> { using type = double; };
-template <> struct Scalar<vec3f> { using type = float; };
-template <> struct Scalar<vec3f4> { using type = float; };
-template <> struct Scalar<vec3f8> { using type = float; };
-template <> struct Scalar<vec3d> { using type = double; };
-template <> struct Scalar<vec3d4> { using type = double; };
-template <> struct Scalar<vec3d8> { using type = double; };
-template <> struct Scalar<vec4f> { using type = float; };
-template <> struct Scalar<vec4f4> { using type = float; };
-template <> struct Scalar<vec4f8> { using type = float; };
-template <> struct Scalar<vec4d> { using type = double; };
-template <> struct Scalar<vec4d4> { using type = double; };
-template <> struct Scalar<vec4d8> { using type = double; };
+template <typename T, int N> using RGB_t = typename V3_TN<T, N>::type;
+template <typename T, int N> using RGBA_t = typename V4_TN<T, N>::type;
+#endif //_RGBA_
 
 forcedinline float toFloat(float v) noexcept { return v; }
 forcedinline float4 toFloat(float4 v) noexcept { return v; }
@@ -1982,25 +2090,6 @@ forcedinline float16 toFloat(float16 v) noexcept { return v; }
 forcedinline double toDouble(double v) noexcept { return v; }
 forcedinline double4 toDouble(double4 v) noexcept { return v; }
 forcedinline double8 toDouble(double8 v) noexcept { return v; }
-
-forcedinline vec3f toFloat(vec3f v) noexcept { return v; }
-forcedinline vec3f toFloat(vec3d v) noexcept { return vec3f{ float(v.x), float(v.y), float(v.z) }; }
-forcedinline vec3d toDouble(vec3f v) noexcept { return vec3d{ v.x, v.y, v.z }; }
-forcedinline vec3d toDouble(vec3d v) noexcept { return v; }
-
-forcedinline vec4f toFloat(vec4f v) noexcept { return v; }
-forcedinline vec4f toFloat(vec4d v) noexcept { return vec4f{ to_float(v.vcl) }; }
-forcedinline vec4d toDouble(vec4f v) noexcept { return vec4d{ to_double(v.vcl) }; }
-forcedinline vec4d toDouble(vec4d v) noexcept { return v; }
-
-template <typename T, int N> struct V2_TN { using type = vec2<Vector_t<T, N>>; };
-template <typename T, int N> using V2_t = typename V2_TN<T, N>::type;
-template <typename T, int N> struct V3_TN { using type = vec3<Vector_t<T, N>>; };
-template <typename T, int N> using V3_t = typename V3_TN<T, N>::type;
-template <typename T, int N> struct V4_TN { using type = vec4<Vector_t<T, N>>; };
-template <typename T, int N> using V4_t = typename V4_TN<T, N>::type;
-template <typename T, int N> using RGB_t = typename V3_TN<T, N>::type;
-template <typename T, int N> using RGBA_t = typename V4_TN<T, N>::type;
 
 template <typename T, typename F> 
 auto to_type(F from)
@@ -2013,6 +2102,7 @@ auto to_type(F from)
         static_assert("Expected float or double");
 }
 
+#if defined(_VECN_)
 template <typename... V>
 class vectorN
 {
@@ -2212,7 +2302,6 @@ namespace vectorN_impl
         return s < sizeof...(VectorSizes) ? vs[s] : 0;
     }
 
-#if defined(_SEQUENCE_)
     template <typename T, typename Seq>
     struct vectorN_from_vectors;
     template <typename T, size_t... Vectors>
@@ -2223,10 +2312,9 @@ namespace vectorN_impl
         static constexpr auto n = tupleVectors<Size, VectorSizes...>();
         using type = vectorN_from_vectors<T, seq::modify_t<tupleVectorScalars<Size, VectorSizes...>, std::make_index_sequence<n>>>::type;
     };
-#endif
+
 }
 
-#if defined(_SEQUENCE_)
 template <typename T, size_t Size, size_t... VectorSizes>
 using vecNT = typename vectorN_impl::vectorN_type<T, Size, VectorSizes...>::type;
 template <typename T, size_t Size>
@@ -2235,9 +2323,9 @@ template <size_t Size>
 using vecNf = vecNT<float, Size, 8, 4, 1>;
 template <size_t Size>
 using vecNd = vecNT<double, Size, 4, 1>;
-#endif
+#endif //_VECN_
 
-
+#if defined(_VEC3_) && defined(_VEC4_)
 template <typename T>
 class Matrix4
 {
@@ -2707,6 +2795,7 @@ public:
 
 using Matrix4f = Matrix4<float>;
 using Matrix4d = Matrix4<double>;
+#endif //Matrix4
 
 
 //  1 out, 1 in...
@@ -2719,21 +2808,13 @@ static forcedinline T hash11(T p)
     return fract(p);
 }
 
+#if defined(_VEC2_) && defined(_VEC3_)
 //  1 out, 2 in...
 template <typename T>
 static forcedinline T hash12(const vec2<T> p)
 {
     vec3<T> p3 = fract(vec3<T>(p.xyx()) * T(0.1031f));
     p3 += p3.dot(p3.yzx() + T(33.33f));
-    return fract((p3.x + p3.y) * p3.z);
-}
-
-//  1 out, 3 in...
-template <typename T>
-static forcedinline T hash13(const vec3<T> p)
-{
-    vec3<T> p3 = fract(p * T(0.1031f));
-    p3 += p3.dot(p3.zyx() + T(31.32f));
     return fract((p3.x + p3.y) * p3.z);
 }
 
@@ -2766,21 +2847,55 @@ static forcedinline vec2<T> hash23(const vec3<T> p)
     return fract((p3.xx() + p3.yz()) * p3.zy());
 }
 
-//  3 out, 1 in...
-template <typename T>
-static forcedinline vec3<T> hash31(T p)
-{
-    vec3<T> p3 = fract(vec3<T>(p) * vec3<T>(T(0.1031f), T(0.1030f), T(0.0973f)));
-    p3 += p3.dot(p3.yzx() + T(33.33f));
-    return fract((p3.xxy() + p3.yzz()) * p3.zyx());
-}
-
 //  3 out, 2 in...
 template <typename T>
 static forcedinline vec3<T> hash32(const vec2<T> p)
 {
     vec3<T> p3 = fract(vec3<T>(p.x, p.y, p.x) * vec3<T>(T(0.1031f), T(0.1030f), T(0.0973f)));
     p3 += p3.dot(p3.yxz() + T(33.33f));
+    return fract((p3.xxy() + p3.yzz()) * p3.zyx());
+}
+#endif
+
+#if defined(_VEC2_) && defined(_VEC4_)
+// 4 out, 2 in...
+template <typename T>
+static forcedinline vec4<T> hash42(const vec2<T> p)
+{
+    vec4<T> p4 = fract(vec4<T>(p.x, p.y, p.x, p.y) * vec4<T>(T(0.1031f), T(0.1030f), T(0.0973f), T(0.1099f)));
+    p4 += p4.dot(p4.wzxy() + T(33.33f));
+    return fract((p4.xxyz() + p4.yzzw()) * p4.zywx());
+
+}
+#endif
+
+#if defined(_VEC3_) && defined(_VEC4_)
+// 4 out, 3 in...
+template <typename T>
+static forcedinline vec4<T> hash43(const vec3<T> p)
+{
+    vec4<T> p4 = fract(vec4<T>(p.x, p.y, p.z, p.x) * vec4<T>(T(0.1031f), T(0.1030f), T(0.0973f), T(0.1099f)));
+    p4 += p4.dot(p4.wzxy() + T(33.33f));
+    return fract((p4.xxyz() + p4.yzzw()) * p4.zywx());
+}
+#endif
+
+#if defined(_VEC3_)
+//  1 out, 3 in...
+template <typename T>
+static forcedinline T hash13(const vec3<T> p)
+{
+    vec3<T> p3 = fract(p * T(0.1031f));
+    p3 += p3.dot(p3.zyx() + T(31.32f));
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+//  3 out, 1 in...
+template <typename T>
+static forcedinline vec3<T> hash31(T p)
+{
+    vec3<T> p3 = fract(vec3<T>(p) * vec3<T>(T(0.1031f), T(0.1030f), T(0.0973f)));
+    p3 += p3.dot(p3.yzx() + T(33.33f));
     return fract((p3.xxy() + p3.yzz()) * p3.zyx());
 }
 
@@ -2793,7 +2908,9 @@ static forcedinline vec3<T> hash33(const vec3<T> p)
     return fract((p3.xxy() + p3.yxx()) * p3.zyx());
 
 }
+#endif
 
+#if defined(_VEC4_)
 // 4 out, 1 in...
 template <typename T>
 static forcedinline vec4<T> hash41(T p)
@@ -2804,25 +2921,6 @@ static forcedinline vec4<T> hash41(T p)
 
 }
 
-// 4 out, 2 in...
-template <typename T>
-static forcedinline vec4<T> hash42(const vec2<T> p)
-{
-    vec4<T> p4 = fract(vec4<T>(p.x, p.y, p.x, p.y) * vec4<T>(T(0.1031f), T(0.1030f), T(0.0973f), T(0.1099f)));
-    p4 += p4.dot(p4.wzxy() + T(33.33f));
-    return fract((p4.xxyz() + p4.yzzw()) * p4.zywx());
-
-}
-
-// 4 out, 3 in...
-template <typename T>
-static forcedinline vec4<T> hash43(const vec3<T> p)
-{
-    vec4<T> p4 = fract(vec4<T>(p.x, p.y, p.z, p.x) * vec4<T>(T(0.1031f), T(0.1030f), T(0.0973f), T(0.1099f)));
-    p4 += p4.dot(p4.wzxy() + T(33.33f));
-    return fract((p4.xxyz() + p4.yzzw()) * p4.zywx());
-}
-
 // 4 out, 4 in...
 template <typename T>
 static forcedinline vec4<T> hash44(const vec4<T> p)
@@ -2831,7 +2929,9 @@ static forcedinline vec4<T> hash44(const vec4<T> p)
     p4 += p4.dot(p4.wzxy() + T(33.33f));
     return fract((p4.xxyz() + p4.yzzw()) * p4.zywx());
 }
+#endif
 
+#if defined(_VEC2_) && defined(_VEC3_) && defined(_VEC4_)
 template <typename T>
 forcedinline T gammaCorrect(T cl)
 {
@@ -2873,7 +2973,9 @@ forcedinline T inverseGammaCorrect(T cl)
         return {};
     }
 }
+#endif
 
+#if defined(_MAP2D_)
 template <typename T>
 class Map2D
 {
@@ -2901,6 +3003,7 @@ protected:
     T defValue{};
     int xdim = 0, ydim = 0;
 };
+#endif
 
 #if defined(_MSC_VER)
 #   pragma warning(pop)
