@@ -646,6 +646,20 @@ template <typename T> static forcedinline vec2<T> hash22(const vec2<T> p);
 
 #if defined(_VEC3_)
 template <typename T> class vec3;
+#define VEC3ZERO {0,0,0}
+#define VEC3POSX {1,0,0}
+#define VEC3POSY {0,1,0}
+#define VEC3POSZ {0,0,1}
+#define VEC3NEGX {-1,0,0}
+#define VEC3NEGY {0,-1,0}
+#define VEC3NEGZ {0,0,-1}
+template <typename T = float> const vec3<T> Vec3Zero VEC3ZERO;
+template <typename T = float> const vec3<T> Vec3PosX VEC3POSX;
+template <typename T = float> const vec3<T> Vec3PosY VEC3POSY;
+template <typename T = float> const vec3<T> Vec3PosZ VEC3POSZ;
+template <typename T = float> const vec3<T> Vec3NegX VEC3NEGX;
+template <typename T = float> const vec3<T> Vec3NegY VEC3NEGY;
+template <typename T = float> const vec3<T> Vec3NegZ VEC3NEGZ;
 template <typename T> static forcedinline T hash13(const vec3<T> p);
 template <typename T> static forcedinline vec3<T> hash31(T p);
 template <typename T> static forcedinline vec3<T> hash33(const vec3<T> p);
@@ -653,6 +667,22 @@ template <typename T> static forcedinline vec3<T> hash33(const vec3<T> p);
 
 #if defined(_VEC4_)
 template <typename T> class vec4;
+#define VEC4ZERO {0,0,0,0}
+#define VEC4POSX {1,0,0,1}
+#define VEC4POSY {0,1,0,1}
+#define VEC4POSZ {0,0,1,1}
+#define VEC4POSW {0,0,0,1}
+#define VEC4NEGX {-1,0,0,1}
+#define VEC4NEGY {0,-1,0,1}
+#define VEC4NEGZ {0,0,-1,1}
+template <typename T = float> const vec4<T> Vec4Zero VEC4ZERO;
+template <typename T = float> const vec4<T> Vec4PosX VEC4POSX;
+template <typename T = float> const vec4<T> Vec4PosY VEC4POSY;
+template <typename T = float> const vec4<T> Vec4PosZ VEC4POSZ;
+template <typename T = float> const vec4<T> Vec4PosW VEC4POSW;
+template <typename T = float> const vec4<T> Vec4NegX VEC4NEGX;
+template <typename T = float> const vec4<T> Vec4NegY VEC4NEGY;
+template <typename T = float> const vec4<T> Vec4NegZ VEC4NEGZ;
 template <typename T> static forcedinline vec4<T> hash41(T p);
 template <typename T> static forcedinline vec4<T> hash44(const vec4<T> p);
 #endif
@@ -984,6 +1014,18 @@ public:
     forcedinline T lengthSquared() const noexcept { return x * x + y * y + z * z; }
     forcedinline vec3& normalize() noexcept { *this /= (length() + Epsilon<Scalar>); return *this; }
     forcedinline vec3 normalized() const noexcept { return *this / (length() + Epsilon<Scalar>); }
+    forcedinline vec3& normalizex() noexcept
+    {
+        auto len = length();
+        auto lr = 1.0f / (len == 0.0f ? Epsilon<Scalar> : len);
+        *this *= lr;
+        return *this;
+    }
+    forcedinline vec3 normalizedx() const noexcept
+    {
+        auto len = length();
+        return *this / (len == 0.0f ? Epsilon<Scalar> : len);
+    }
     forcedinline vec3 limit(float lim = 1.0f) const noexcept
     {
         T m = max(x, y, z);
@@ -1230,6 +1272,27 @@ public:
     forcedinline T lengthSquared() const noexcept { return dot(*this); }
     forcedinline vec4& normalize() noexcept { auto lr = 1.0f / (length() + Epsilon<Scalar>); vcl *= lr; return *this; }
     forcedinline vec4 normalized() const noexcept { auto lr = 1.0f / (length() + Epsilon<Scalar>); return *this * lr; }
+    forcedinline vec4& normalizex() noexcept
+    {
+        auto len = length();
+        auto lr = 1.0f / (len == 0.0f ? Epsilon<Scalar> : len);
+        xmm *= lr;
+        return *this;
+    }
+    forcedinline vec4 normalizedx() const noexcept
+    {
+        auto len = length();
+        return *this / (len == 0.0f ? Epsilon<Scalar> : len);
+    }
+    forcedinline vec4<T> slerp(const vec4<T> targetvec, T val) noexcept
+    {
+        (*this).w = T(0);
+        T dot = clamp((*this).dot(targetvec), T(-1.0), T(1.0));
+        T theta = acos(dot) * val;
+        vec4<T> relvec = (targetvec - *this * dot);
+        relvec.normalizex();
+        return ((*this * std::cos(theta)) + (relvec * std::sin(theta)));
+    }
     forcedinline vec4 limit(float lim = 1.0f) const noexcept
     {
         auto m = lim / horizontal_max(vcl);
@@ -1244,6 +1307,72 @@ public:
     {
         static int seed = (int)(fract(std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count()) * INT_MAX);
         return vec4{ fast_rand<Vector_t<T, 4>>(&seed) - 0.5f }.normalized();
+    }
+    static forcedinline vec4 xyz_rand(int* seed, T a4 = 1.0f)
+    {
+        vec4<T> v = fast_rand<VCL_t<T, 4>>(seed) - 0.5f;
+        v.w = a4;
+        return v;
+    }
+    static forcedinline vec4 xz_rand(int* seed, T a4 = 1.0f)
+    {
+        vec4<T> v = fast_rand<VCL_t<T, 4>>(seed) - 0.5f;
+        v.y = T(0.0);
+        v.w = a4;
+        return v;
+    }
+    static forcedinline vec4 xyzmult_rand(int* seed, const vec4<T> mult)
+    {
+        vec4<T> v = vec4<T>(fast_rand<VCL_t<T, 4>>(seed) - 0.5f) * mult;
+        v.w = mult.w;
+        return v;
+    }
+    forcedinline T rgbGetT() noexcept
+    {
+        unsigned int uValue;
+        uValue = ((unsigned int)(clamp(x, T(0.0), T(0.998)) * 65535.0f + 0.5f));
+        uValue |= ((unsigned int)(clamp(y, T(0.0), T(0.998)) * 255.0f + 0.5f)) << 16;
+        uValue |= ((unsigned int)(clamp(z, T(0.0), T(0.998)) * 253.0f + 1.5f)) << 24;
+
+        return (T)(uValue);
+    }
+    forcedinline T rgbInvGetT() noexcept
+    {
+        unsigned int uValue;
+        uValue = ((unsigned int)(clamp(T(1.0) - x, T(0.0), T(0.998)) * 65535.0f + 0.5f));
+        uValue |= ((unsigned int)(clamp(T(1.0) - y, T(0.0), T(0.998)) * 255.0f + 0.5f)) << 16;
+        uValue |= ((unsigned int)(clamp(T(1.0) - z, T(0.0), T(0.998)) * 253.0f + 1.5f)) << 24;
+
+        return (T)(uValue);
+    }
+    forcedinline vec4<T> rgbSetW() noexcept
+    {
+        unsigned int uValue;
+        uValue = ((unsigned int)(clamp(x, T(0.0), T(0.998)) * 65535.0f + 0.5f));
+        uValue |= ((unsigned int)(clamp(y, T(0.0), T(0.998)) * 255.0f + 0.5f)) << 16;
+        uValue |= ((unsigned int)(clamp(z, T(0.0), T(0.998)) * 253.0f + 1.5f)) << 24;
+        w = (T)(uValue);
+
+        return *this;
+    }
+    forcedinline vec4<T> rgbInvSetW() noexcept
+    {
+        unsigned int uValue;
+        uValue = ((unsigned int)(clamp(T(1.0) - x, T(0.0), T(0.998)) * 65535.0f + 0.5f));
+        uValue |= ((unsigned int)(clamp(T(1.0) - y, T(0.0), T(0.998)) * 255.0f + 0.5f)) << 16;
+        uValue |= ((unsigned int)(clamp(T(1.0) - z, T(0.0), T(0.998)) * 253.0f + 1.5f)) << 24;
+        w = (T)(uValue);
+
+        return *this;
+    }
+    forcedinline vec3<T> rgbFromW() const noexcept
+    {
+        vec3<T> rgb;
+        unsigned int uValue = (unsigned int)(w);
+        rgb.r = ((uValue) & 0xFFFF) / 65535.0f;
+        rgb.g = ((uValue >> 16) & 0xFF) / 255.0f;
+        rgb.b = (((uValue >> 24) & 0xFF) - 1.0f) / 253.0f;
+        return rgb;
     }
 
 #if defined(_VEC2_)
