@@ -10,7 +10,9 @@
 
 #pragma once
 
-// 4127=conditional expression is constant, 4702=Unreachable code, 4201=anonymous struct 
+#include <cassert>
+
+// 4127=conditional expression is constant, 4702=Unreachable code, 4201=anonymous struct
 #if defined(_MSC_VER)
 #   pragma warning(push)
 #   pragma warning(disable : 4127 4702 4201)  
@@ -25,16 +27,15 @@
 #endif
 
 #if __arm64__
-#include <cassert>
-#include <sse2neon.h>
-// limit to 128byte, since we want to use ARM-neon
-#define MAX_VECTOR_SIZE 512
-//limit to sse4.2, sse2neon does not have any AVX instructions ( so far )
-#define INSTRSET 6
-//define unknown function
-#define _mm_getcsr() 1
-//simulate header included
-#define __X86INTRIN_H
+    #include <sse2neon.h>
+    // limit to 128byte, since we want to use ARM-neon
+    #define MAX_VECTOR_SIZE 512
+    //limit to sse4.2, sse2neon does not have any AVX instructions ( so far )
+    #define INSTRSET 6
+    //define unknown function
+    #define _mm_getcsr() 1
+    //simulate header included
+    #define __X86INTRIN_H
 #endif
 
 #include "vectorclass.h"
@@ -62,6 +63,7 @@ static inline bool horizontal_or(Vec4fb const a, int mask) {
     return (_mm_movemask_ps(a) & mask) != 0;
 }
 
+#if defined(_VECN_)
 // horizontal_and. Returns true if all bits are 1
 static inline bool horizontal_and(Vec8fb const a, int mask) {
     return _mm256_movemask_ps(a) == mask;
@@ -72,7 +74,6 @@ static inline bool horizontal_or(Vec8fb const a, int mask) {
     return (_mm256_movemask_ps(a) & mask) != 0;
 }
 
-#if defined(_VECN_)
 // Some sequence code inspired by The Art of C++ / Sequences
 // https://github.com/taocpp/sequences
 
@@ -1089,19 +1090,19 @@ public:
     forcedinline vec3<T> zzz() const noexcept { return { z, z, z }; }   forcedinline vec3<T> bbb() const noexcept { return { b, b, b }; }   forcedinline vec3<T> www() const noexcept { return { z, z, z }; }
 
     template <int A0>
-    forcedinline T get() const noexcept { jassert(A0 < size()); return value._[A0]; }
+    forcedinline T get() const noexcept { assert(A0 < size()); return value._[A0]; }
     template <int A0>
-    forcedinline void set(T a0) const noexcept { jassert(A0 < size()); value._[A0] = a0; }
+    forcedinline void set(T a0) const noexcept { assert(A0 < size()); value._[A0] = a0; }
 #if defined(_VEC2_)
     template <int A0, int A1>
-    forcedinline vec2<T> get() const noexcept { jassert(max(A0, A1) < size()); return { value._[A0], value._[A1] }; }
+    forcedinline vec2<T> get() const noexcept { assert(max(A0, A1) < size()); return { value._[A0], value._[A1] }; }
 #endif
     template <int A0, int A1>
-    forcedinline void set(T a0, T a1) const noexcept { jassert(max(A0, A1) < size()); value._[A0] = a0; value._[A1] = a1; }
+    forcedinline void set(T a0, T a1) const noexcept { assert(max(A0, A1) < size()); value._[A0] = a0; value._[A1] = a1; }
     template <int A0, int A1, int A2>
-    forcedinline vec3<T> get() const noexcept { jassert(max(A0, A1, A2) < size()); return { value._[A0], value._[A1], value._[A2] }; }
+    forcedinline vec3<T> get() const noexcept { assert(max(A0, A1, A2) < size()); return { value._[A0], value._[A1], value._[A2] }; }
     template <int A0, int A1, int A2>
-    forcedinline void set(T a0, T a1, T a2) const noexcept { jassert(max(A0, A1, A2) < size()); value._[A0] = a0; value._[A1] = a1; value._[A2] = a2; }
+    forcedinline void set(T a0, T a1, T a2) const noexcept { assert(max(A0, A1, A2) < size()); value._[A0] = a0; value._[A1] = a1; value._[A2] = a2; }
 
     static constexpr int elementtype()
     {
@@ -1276,7 +1277,7 @@ public:
     {
         auto len = length();
         auto lr = 1.0f / (len == 0.0f ? Epsilon<Scalar> : len);
-        xmm *= lr;
+        *this *= lr;
         return *this;
     }
     forcedinline vec4 normalizedx() const noexcept
@@ -1310,20 +1311,20 @@ public:
     }
     static forcedinline vec4 xyz_rand(int* seed, T a4 = 1.0f)
     {
-        vec4<T> v = fast_rand<VCL_t<T, 4>>(seed) - 0.5f;
+        vec4<T> v = fast_rand<Vector_t<T, 4>>(seed) - 0.5f;
         v.w = a4;
         return v;
     }
     static forcedinline vec4 xz_rand(int* seed, T a4 = 1.0f)
     {
-        vec4<T> v = fast_rand<VCL_t<T, 4>>(seed) - 0.5f;
+        vec4<T> v = fast_rand<Vector_t<T, 4>>(seed) - 0.5f;
         v.y = T(0.0);
         v.w = a4;
         return v;
     }
     static forcedinline vec4 xyzmult_rand(int* seed, const vec4<T> mult)
     {
-        vec4<T> v = vec4<T>(fast_rand<VCL_t<T, 4>>(seed) - 0.5f) * mult;
+        vec4<T> v = vec4<T>(fast_rand<Vector_t<T, 4>>(seed) - 0.5f) * mult;
         v.w = mult.w;
         return v;
     }
@@ -1712,25 +1713,25 @@ public:
     forcedinline vec4<T> wwww() const noexcept { return { w, w, w, w }; }   forcedinline vec4<T> bbbb() const noexcept { return { b, b, b, b }; }
 
     template <int A0> 
-    forcedinline T get() const noexcept { jassert(A0 < size()); return value._[A0]; }
+    forcedinline T get() const noexcept { assert(A0 < size()); return value._[A0]; }
     template <int A0> 
-    forcedinline void set(T a0) const noexcept { jassert(A0 < size()); value._[A0] = a0; }
+    forcedinline void set(T a0) const noexcept { assert(A0 < size()); value._[A0] = a0; }
 #if defined(_VEC2_)
     template <int A0, int A1> 
-    forcedinline vec2<T> get() const noexcept { jassert(max(A0, A1) < size()); return { value._[A0], value._[A1] }; }
+    forcedinline vec2<T> get() const noexcept { assert(max(A0, A1) < size()); return { value._[A0], value._[A1] }; }
 #endif
     template <int A0, int A1> 
-    forcedinline void set(T a0, T a1) const noexcept { jassert(max(A0, A1) < size()); value._[A0] = a0; value._[A1] = a1; }
+    forcedinline void set(T a0, T a1) const noexcept { assert(max(A0, A1) < size()); value._[A0] = a0; value._[A1] = a1; }
 #if defined(_VEC3_)
     template <int A0, int A1, int A2> 
-    forcedinline vec3<T> get() const noexcept { jassert(max(A0, A1, A2) < size()); return { value._[A0], value._[A1], value._[A2] }; }
+    forcedinline vec3<T> get() const noexcept { assert(max(A0, A1, A2) < size()); return { value._[A0], value._[A1], value._[A2] }; }
 #endif
     template <int A0, int A1, int A2> 
-    forcedinline void set(T a0, T a1, T a2) const noexcept { jassert(max(A0, A1, A2) < size()); value._[A0] = a0; value._[A1] = a1; value._[A2] = a2; }
+    forcedinline void set(T a0, T a1, T a2) const noexcept { assert(max(A0, A1, A2) < size()); value._[A0] = a0; value._[A1] = a1; value._[A2] = a2; }
     template <int A0, int A1, int A2, int A3> 
-    forcedinline vec4<T> get() const noexcept { jassert(max(A0, A1, A2, A3) < size()); return { value._[A0], value._[A1], value._[A2], value._[A3] }; }
+    forcedinline vec4<T> get() const noexcept { assert(max(A0, A1, A2, A3) < size()); return { value._[A0], value._[A1], value._[A2], value._[A3] }; }
     template <int A0, int A1, int A2, int A3> 
-    forcedinline void set(T a0, T a1, T a2, T a3) const noexcept { jassert(max(A0, A1, A2, A3) < size()); value._[A0] = a0; value._[A1] = a1; value._[A2] = a2; value._[A3] = a3; }
+    forcedinline void set(T a0, T a1, T a2, T a3) const noexcept { assert(max(A0, A1, A2, A3) < size()); value._[A0] = a0; value._[A1] = a1; value._[A2] = a2; value._[A3] = a3; }
 
     static constexpr int elementtype()
     {
