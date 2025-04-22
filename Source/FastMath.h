@@ -1,12 +1,41 @@
 /*
-  ==============================================================================
-
-    FastMath.h
-    Created: 29 Mar 2021 10:19:40am
-    Author:  mathi
-
-  ==============================================================================
-*/
+ * Copyright 2025 DigitalExpressions Sweden
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * 
+ * ------------------------------------------------------------------------
+ * 
+ * FastMath.h contains code inspired from from various online sources,
+ * licensed here under the Apache Version 2.0. All code is experimental
+ * and must be treated accordingly.
+ * 
+ * Inspiration for the code comes from the following URLs:
+ * 
+ * http://martin.ankerl.com/2007/10/04/optimized-pow-approximation-for-java-and-c-c/
+ * http://fastcpp.blogspot.fr/2011/03/changing-sign-of-float-values-using-sse.html
+ * http://www.songho.ca/misc/sse/sse.html
+ * http://markplusplus.wordpress.com/2007/03/14/fast-sse-select-operation/
+ * http://www.masmforum.com/board/index.php?PHPSESSID=786dd40408172108b65a5a36b09c88c0&topic=9515.0
+ * http://cbloomrants.blogspot.fr/2010/11/11-20-10-function-approximation-by_20.html
+ * http://assemblyrequired.crashworks.org/2009/10/16/timing-square-root/
+ * http://nghiaho.com/?p=997
+ * http://www.researchgate.net/publication/3321724_Efficient_approximations_for_the_arctangent_function
+ * http://www.ganssle.com/approx/approx.pdf
+ * http://forum.allaboutcircuits.com/newsgroups/viewtopic.php?t=68185
+ * 
+ * Additional credits for some parts of the code can be found in the comments below here. 
+ * 
+ */
 
 #pragma once
 #include <immintrin.h>
@@ -20,56 +49,41 @@
 #   endif
 #endif
 
-//Most ninja tricks used here:
-//http://fastcpp.blogspot.fr/2011/03/changing-sign-of-float-values-using-sse.html
-//http://www.songho.ca/misc/sse/sse.html
-//http://markplusplus.wordpress.com/2007/03/14/fast-sse-select-operation/
-//http://www.masmforum.com/board/index.php?PHPSESSID=786dd40408172108b65a5a36b09c88c0&topic=9515.0
-//http://cbloomrants.blogspot.fr/2010/11/11-20-10-function-approximation-by_20.html
-//http://assemblyrequired.crashworks.org/2009/10/16/timing-square-root/
-//http://nghiaho.com/?p=997
-//http://www.researchgate.net/publication/3321724_Efficient_approximations_for_the_arctangent_function
-//http://www.ganssle.com/approx/approx.pdf
-//http://forum.allaboutcircuits.com/newsgroups/viewtopic.php?t=68185
-
-
 //FT Accuracy :
 //
-//FT::sqrt / sqrt_ps max error : 0.032 % (average error : 0.0094 %)
-//FT::atan2 / atan2_ps max error : 0.024 % (0.0015 radians, 0.086 degrees)
-//FT::cos / cos_ps max error : 0.06 %
-//FT::sin / sin_ps max error : 0.06 %
+// FT::sqrt / sqrt_ps max error : 0.032 % (average error : 0.0094 %)
+// FT::atan2 / atan2_ps max error : 0.024 % (0.0015 radians, 0.086 degrees)
+// FT::cos / cos_ps max error : 0.06 %
+// FT::sin / sin_ps max error : 0.06 %
 //
-//FT Speed up(MSVC2012 x64) :
+// FT Speed up(MSVC2012 x64) :
 //
-//    FT::sqrt speed up : x2.5 (from standard sqrt)
-//    FT::atan2 speed up : x2.3 (from standard atan2)
-//    FT::sin / cos speed up : x1.9 (from standard sin / cos)
-//    FT::sincos speed up : x2.3 (from standard sin + cos)
-//    FT::sqrt_ps speed up : x8(from standard sqrt)
-//    FT::atan2_ps speed up : x7.3 (from standard atan2)
-//    FT::sin_ps / cos_ps speed up : x4.9 (from standard sin / cos)
-//    FT::sincos_ps speed up : x6.2 (from standard sin + cos)
+// FT::sqrt speed up : x2.5 (from standard sqrt)
+// FT::atan2 speed up : x2.3 (from standard atan2)
+// FT::sin / cos speed up : x1.9 (from standard sin / cos)
+// FT::sincos speed up : x2.3 (from standard sin + cos)
+// FT::sqrt_ps speed up : x8(from standard sqrt)
+// FT::atan2_ps speed up : x7.3 (from standard atan2)
+// FT::sin_ps / cos_ps speed up : x4.9 (from standard sin / cos)
+// FT::sincos_ps speed up : x6.2 (from standard sin + cos)
 //
-//    FTA Accuracy :
+// FTA Accuracy :
 //
-//FTA::sqrt / sqrt_ps max error : 0 %
-//FTA::atan2 / atan2_ps max error : 0.0005 %
-//FTA::cos / cos_ps max error : 0.0007 %
-//FTA::sin / sin_ps max error : 0.0007 %
+// FTA::sqrt / sqrt_ps max error : 0 %
+// FTA::atan2 / atan2_ps max error : 0.0005 %
+// FTA::cos / cos_ps max error : 0.0007 %
+// FTA::sin / sin_ps max error : 0.0007 %
 //
-//FTA Speed up(MSVC2012 x64) :
+// FTA Speed up(MSVC2012 x64) :
 //
-//    FTA::sqrt speed up : x1.5 (from standard sqrt)
-//    FTA::atan2 speed up : x1.7 (from standard atan2)
-//    FTA::sin / cos speed up : x1.6 (from standard sin / cos)
-//    FTA::sincos speed up : x1.8 (from standard sin + cos)
-//    FTA::sqrt_ps speed up : x4.9 (from standard sqrt)
-//    FTA::atan2_ps speed up : x5.2 (from standard atan2)
-//    FTA::sin_ps / cos_ps speed up : x4.3 (from standard sin / cos)
-//    FTA::sincos_ps speed up : x5.2 (from standard sin + cos)
-
-
+// FTA::sqrt speed up : x1.5 (from standard sqrt)
+// FTA::atan2 speed up : x1.7 (from standard atan2)
+// FTA::sin / cos speed up : x1.6 (from standard sin / cos)
+// FTA::sincos speed up : x1.8 (from standard sin + cos)
+// FTA::sqrt_ps speed up : x4.9 (from standard sqrt)
+// FTA::atan2_ps speed up : x5.2 (from standard atan2)
+// FTA::sin_ps / cos_ps speed up : x4.3 (from standard sin / cos)
+// FTA::sincos_ps speed up : x5.2 (from standard sin + cos)
 
 ///////////////////////////////////
 //FT NAMESPACE (DEFAULT ACCURACY)//
@@ -108,9 +122,7 @@ namespace FT
     static forcedinline std::pair<__m128, __m128> sincos_ps(__m128 angle);
 
     /*
-     * See http://martin.ankerl.com/2007/10/04/optimized-pow-approximation-for-java-and-c-c/
-     *
-     * All of these rely on being on a little endian machine, such as an Intel box.
+     * All of the functions rely on being on a little endian machine, such as an Intel box.
      *
      * These can be _quite_ inaccurate. ~20% in many cases, but being much faster (~7x) may
      * permit more loop iterations of tuning algorithms that only need approximate powers.
