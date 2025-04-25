@@ -19,15 +19,15 @@
  * VCL2 SIMD wrapper classes.
  * Preprocessor definitions.
  * --------------------------
- * _ALL_
- * _JUCE_
- * _VECN_
- * _VEC2_
- * _VEC3_
- * _VEC4_
- * _RGBA_
- * _ARGB_
- * _MAP2D_
+ * GFXMATH_ALL
+ * GFXMATH_JUCE
+ * GFXMATH_VECN
+ * GFXMATH_VEC2
+ * GFXMATH_VEC3
+ * GFXMATH_VEC4
+ * GFXMATH_RGBA
+ * GFXMATH_ARGB
+ * GFXMATH_MAP2D
  * --------------------------
  */
 
@@ -76,7 +76,7 @@ static inline bool horizontal_or(Vec4fb const a, int mask) {
     return (_mm_movemask_ps(a) & mask) != 0;
 }
 
-#if defined(_VECN_) || defined(_ALL_)
+#if defined(GFXMATH_VECN) || defined(GFXMATH_ALL)
 // horizontal_and. Returns true if all bits are 1
 static inline bool horizontal_and(Vec8fb const a, int mask) {
     return _mm256_movemask_ps(a) == mask;
@@ -235,7 +235,7 @@ template <typename First, typename... Tail>
 struct FirstType { using type = First; };
 template <typename First, typename... Tail>
 using FirstType_t = typename FirstType<First, Tail...>::type;
-#endif //_VECN_
+#endif //GFXMATH_VECN
 
 template <typename T = float> constexpr auto E = T(2.71828182845904523536);
 template <typename T = float> constexpr auto HalfPi = T(1.57079632679489661923);
@@ -651,14 +651,14 @@ forcedinline T approx_sqrt(T number)
 // Forward template declarations
 template <typename T> static forcedinline T hash11(T p);
 
-#if defined(_VEC2_) || defined(_ALL_)
+#if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
 template <typename T> class vec2;
 template <typename T> static forcedinline T hash12(const vec2<T> p);
 template <typename T> static forcedinline vec2<T> hash21(T p);
 template <typename T> static forcedinline vec2<T> hash22(const vec2<T> p);
 #endif
 
-#if defined(_VEC3_) || defined(_ALL_)
+#if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
 template <typename T> class vec3;
 #define VEC3ZERO {0,0,0}
 #define VEC3POSX {1,0,0}
@@ -679,7 +679,7 @@ template <typename T> static forcedinline vec3<T> hash31(T p);
 template <typename T> static forcedinline vec3<T> hash33(const vec3<T> p);
 #endif
 
-#if defined(_VEC4_) || defined(_ALL_)
+#if defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
 template <typename T> class vec4;
 #define VEC4ZERO {0,0,0,0}
 #define VEC4POSX {1,0,0,1}
@@ -701,20 +701,20 @@ template <typename T> static forcedinline vec4<T> hash41(T p);
 template <typename T> static forcedinline vec4<T> hash44(const vec4<T> p);
 #endif
 
-#if defined(_VEC2_) || defined(_ALL_) && defined(_VEC3_) || defined(_ALL_)
+#if defined(GFXMATH_VEC2) && defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
 template <typename T> static forcedinline vec2<T> hash23(const vec3<T> p);
 template <typename T> static forcedinline vec3<T> hash32(const vec2<T> p);
 #endif
 
-#if defined(_VEC2_) || defined(_ALL_) && defined(_VEC4_) || defined(_ALL_)
+#if defined(GFXMATH_VEC2) && defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
 template <typename T> static forcedinline vec4<T> hash42(const vec2<T> p);
 #endif
 
-#if defined(_VEC3_) || defined(_ALL_) && defined(_VEC4_) || defined(_ALL_)
+#if defined(GFXMATH_VEC3) && defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
 template <typename T> static forcedinline vec4<T> hash43(const vec3<T> p);
 #endif
 
-#if defined(_ARGB_) || defined(_ALL_)
+#if defined(GFXMATH_ARGB) || defined(GFXMATH_ALL)
 template <typename T> class ARGB;
 #endif
 
@@ -723,7 +723,7 @@ template <typename T> class ARGB;
 * vec2 class
 * ----------------------------------------------------------------
 */
-#if defined(_VEC2_) || defined(_ALL_)
+#if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
 template <typename T>
 class vec2
 {
@@ -747,7 +747,7 @@ public:
     template <typename FP>
     constexpr vec2(typename std::enable_if_t<!std::is_same_v<T, FP>&& std::is_floating_point_v<T>&& std::is_floating_point_v<FP>, const vec2<FP>&> v) : x(v.x), y(v.y) {}
 
-#if defined(_JUCE_) || defined(_ALL_)
+#if defined(GFXMATH_JUCE) || defined(GFXMATH_ALL)
     constexpr vec2(const Point<Scalar>& v) : x(v.x), y(v.y) {}
 #endif
 
@@ -891,14 +891,14 @@ public:
             return T::elementtype();
     }
 };
-#endif //_VEC2_
+#endif //GFXMATH_VEC2
 
 /*
 * ----------------------------------------------------------------
 * vec3 class
 * ----------------------------------------------------------------
 */
-#if defined(_VEC3_) || defined(_ALL_)
+#if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
 template <typename T>
 class vec3
 {
@@ -918,19 +918,19 @@ public:
     constexpr vec3() : x(0.0f), y(0.0f), z(0.0f) {}
     constexpr vec3(T v) : x(v), y(v), z(v) {}
     constexpr vec3(T x, T y, T z) : x(x), y(y), z(z) {}
-#if defined(_VEC2_) || defined(_ALL_)
+#if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
     constexpr vec3(T x, const vec2<T> v2) : x(x), y(v2.x), z(v2.y) {}
     constexpr vec3(const vec2<T> v2, T z = {}) : x(v2.x), y(v2.y), z(z) {}
 #endif
     constexpr vec3(const vec3<Scalar>& v) : x(v.x), y(v.y), z(v.z) {}
     template <typename FP>
     constexpr vec3(typename std::enable_if_t<!std::is_same_v<T, FP> && std::is_floating_point_v<T> && std::is_floating_point_v<FP>, const vec3<FP>&> v) : x(v.x), y(v.y), z(v.z) {}
-#if defined(_VEC4_) || defined(_ALL_)
+#if defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
     constexpr vec3(const vec4<Scalar>& v) : x(v.x), y(v.y), z(v.z) {}
 #endif
     constexpr vec3(const Value& v) : value(v) {}
 
-#if defined(_JUCE_) || defined(_ALL_)
+#if defined(GFXMATH_JUCE) || defined(GFXMATH_ALL)
     constexpr vec3(const Colour c) : vec3(c.getFloatRed(), c.getFloatGreen(), c.getFloatBlue()) {}
     forcedinline operator Colour() const { return Colour::fromFloatRGBA(r, g, b, 1.0f); }
 #endif
@@ -1062,7 +1062,7 @@ public:
         return (vec3{ x, y, z } - 0.5f).normalized();
     }
 
-#if defined(_VEC2_) || defined(_ALL_)
+#if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
     forcedinline vec2<T> xx() const noexcept { return { x, x }; }       forcedinline vec2<T> rr() const noexcept { return { r, r }; }       forcedinline vec2<T> uu() const noexcept { return { x, x }; }
     forcedinline vec2<T> xy() const noexcept { return { x, y }; }       forcedinline vec2<T> rg() const noexcept { return { r, g }; }       forcedinline vec2<T> uv() const noexcept { return { x, y }; }
     forcedinline vec2<T> xz() const noexcept { return { x, z }; }       forcedinline vec2<T> rb() const noexcept { return { r, b }; }       forcedinline vec2<T> uw() const noexcept { return { x, z }; }
@@ -1106,7 +1106,7 @@ public:
     forcedinline T get() const noexcept { assert(A0 < size()); return value._[A0]; }
     template <int A0>
     forcedinline void set(T a0) const noexcept { assert(A0 < size()); value._[A0] = a0; }
-#if defined(_VEC2_) || defined(_ALL_)
+#if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
     template <int A0, int A1>
     forcedinline vec2<T> get() const noexcept { assert(max(A0, A1) < size()); return { value._[A0], value._[A1] }; }
 #endif
@@ -1127,14 +1127,14 @@ public:
             return T::elementtype();
     }
 };
-#endif //_VEC3_
+#endif //GFXMATH_VEC3
 
 /*
 * ----------------------------------------------------------------
 * vec4 class
 * ----------------------------------------------------------------
 */
-#if defined(_VEC4_) || defined(_ALL_)
+#if defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
 template <typename T>
 class vec4
 {
@@ -1171,13 +1171,13 @@ public:
     constexpr vec4() : vcl(0) {}
     constexpr vec4(T v) : vcl(v) {}
     constexpr vec4(T x, T y, T z, T w = {}) : vcl(x, y, z, w) {}
-#if defined(_VEC2_) || defined(_ALL_)
+#if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
     constexpr vec4(T x, T y, const vec2<T> v2) : vcl(x, y, v2.x, v2.y) {}
     constexpr vec4(T x, const vec2<T> v2, T w) : vcl(x, v2.x, v2.y, w) {}
     constexpr vec4(const vec2<T> v2, T z = {}, T w = {}) : vcl(v2.x, v2.y, z, w) {}
     constexpr vec4(const vec2<T> v1, const vec2<T> v2) : vcl(v1.x, v1.y, v2.x, v2.y) {}
 #endif
-#if defined(_VEC3_) || defined(_ALL_)
+#if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
     constexpr vec4(T x, const vec3<T> v3) : vcl(x, v3.x, v3.y, v3.z) {}
     constexpr vec4(const vec3<T> v3, T w = {}) : vcl(v3.x, v3.y, v3.z, w) {}
 #endif
@@ -1188,7 +1188,7 @@ public:
     constexpr vec4(typename std::enable_if_t<!std::is_same_v<T, FP>&& std::is_floating_point_v<T>&& std::is_floating_point_v<FP>, const vec4<FP>&> v) : x(v.x), y(v.y), z(v.z), w(v.w) {}
     constexpr vec4(const T* v) { vcl.load_a(v); }
 
-#if defined(_JUCE_) || defined(_ALL_)
+#if defined(GFXMATH_JUCE) || defined(GFXMATH_ALL)
     constexpr vec4(const Colour c) : vcl(c.getFloatRed(), c.getFloatGreen(), c.getFloatBlue(), c.getFloatAlpha()) {}
     forcedinline operator Colour() const noexcept { return Colour::fromFloatRGBA(r, g, b, a); }
 #endif
@@ -1389,7 +1389,7 @@ public:
         return rgb;
     }
 
-#if defined(_VEC2_) || defined(_ALL_)
+#if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
     forcedinline vec2<T> xx() const noexcept { return { x, x }; }           forcedinline vec2<T> aa() const noexcept { return { a, a }; }
     forcedinline vec2<T> xy() const noexcept { return { x, y }; }           forcedinline vec2<T> ar() const noexcept { return { a, r }; }
     forcedinline vec2<T> xz() const noexcept { return { x, z }; }           forcedinline vec2<T> ag() const noexcept { return { a, g }; }
@@ -1407,7 +1407,7 @@ public:
     forcedinline vec2<T> wz() const noexcept { return { w, z }; }           forcedinline vec2<T> bg() const noexcept { return { b, g }; }
     forcedinline vec2<T> ww() const noexcept { return { w, w }; }           forcedinline vec2<T> bb() const noexcept { return { b, b }; }
 #endif
-#if defined(_VEC3_) || defined(_ALL_)
+#if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
     forcedinline vec3<T> xxx() const noexcept { return { x, x, x }; }       forcedinline vec3<T> aaa() const noexcept { return { a, a, a }; }
     forcedinline vec3<T> xxy() const noexcept { return { x, x, y }; }       forcedinline vec3<T> aar() const noexcept { return { a, a, r }; }
     forcedinline vec3<T> xxz() const noexcept { return { x, x, z }; }       forcedinline vec3<T> aag() const noexcept { return { a, a, g }; }
@@ -1729,13 +1729,13 @@ public:
     forcedinline T get() const noexcept { assert(A0 < size()); return value._[A0]; }
     template <int A0> 
     forcedinline void set(T a0) const noexcept { assert(A0 < size()); value._[A0] = a0; }
-#if defined(_VEC2_) || defined(_ALL_)
+#if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
     template <int A0, int A1> 
     forcedinline vec2<T> get() const noexcept { assert(max(A0, A1) < size()); return { value._[A0], value._[A1] }; }
 #endif
     template <int A0, int A1> 
     forcedinline void set(T a0, T a1) const noexcept { assert(max(A0, A1) < size()); value._[A0] = a0; value._[A1] = a1; }
-#if defined(_VEC3_) || defined(_ALL_)
+#if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
     template <int A0, int A1, int A2> 
     forcedinline vec3<T> get() const noexcept { assert(max(A0, A1, A2) < size()); return { value._[A0], value._[A1], value._[A2] }; }
 #endif
@@ -1756,9 +1756,9 @@ public:
             return T::elementtype();
     }
 };
-#endif //_VEC4_
+#endif //GFXMATH_VEC4
 
-#if defined(_VEC2_) || defined(_ALL_)
+#if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
 template <typename T>
 forcedinline vec2<T> select(const BoolType<T> s, const vec2<T>& a, const vec2<T>& b)
 {
@@ -1806,9 +1806,9 @@ forcedinline const vec2<T> max1(const vec2<T>& a) noexcept
 {
     return { T(a.x >= a.y), T(a.y < a.x) };
 }
-#endif //_VEC2_
+#endif //GFXMATH_VEC2
 
-#if defined(_VEC3_) || defined(_ALL_)
+#if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
 template <typename T>
 forcedinline vec3<T> select(const BoolType<T> s, const vec3<T>& a, const vec3<T>& b)
 {
@@ -1859,9 +1859,9 @@ forcedinline const vec3<T> max1(const vec3<T>& a) noexcept
     auto bx = a.x == m, by = a.y == m, bz = a.z == m;
     return { T(bx), T(by && !bx), T(bz && !(bx || by)) };
 }
-#endif //_VEC3_
+#endif //GFXMATH_VEC3
 
-#if defined(_VEC4_) || defined(_ALL_)
+#if defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
 template <typename T>
 forcedinline vec4<T> select(const BoolType<T> s, const vec4<T>& a, const vec4<T>& b)
 {
@@ -1919,9 +1919,9 @@ forcedinline const vec4<T> max1(const vec4<T>& a) noexcept
     auto bx = a.x == m, by = a.y == m, bz = a.z == m, bw = a.w == m;
     return { T(bx), T(by && !bx), T(bz && !(bx || by)), T(bw && !(bx || by || bz)) };
 }
-#endif //_VEC4_
+#endif //GFXMATH_VEC4
 
-#if defined(_ARGB_) || defined(_ALL_)
+#if defined(GFXMATH_ARGB) || defined(GFXMATH_ALL)
 template <typename T>
 forcedinline ARGB<T> select(const BoolType<Vector_t<T, 4>> s, const ARGB<T>& a, const ARGB<T>& b)
 {
@@ -1957,7 +1957,7 @@ template <typename T>
 forcedinline const ARGB<T> max(const ARGB<T>& a, T b) noexcept { return max(a.vcl, b); }
 template <typename T>
 forcedinline const T horizontal_max(const ARGB<T>& a) noexcept { return horizontal_max(a.vcl); }
-#endif //_ARGB_
+#endif //GFXMATH_ARGB
 
 template <typename T, std::enable_if_t<std::is_arithmetic_v<T>>>
 forcedinline const T add(const T a) noexcept { return a; }
@@ -1965,7 +1965,7 @@ forcedinline const T add(const T a) noexcept { return a; }
 template <typename T>
 forcedinline const T sign(const T& v) noexcept { return select(v < 0, -1, 1); }
 
-#if defined(_VEC2_) || defined(_ALL_)
+#if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
 template <typename T>
 forcedinline const vec2<T> abs(const vec2<T>& a) noexcept { return { abs(a.x), abs(a.y) }; }
 template <typename T>
@@ -2004,9 +2004,9 @@ template <typename T>
 forcedinline const vec2<T> floor(const vec2<T>& a) noexcept { return { floor(a.x), floor(a.y) }; }
 template <typename T>
 forcedinline const vec2<T> ceil(const vec2<T>& a) noexcept { return { ceil(a.x), ceil(a.y) }; }
-#endif //_VEC2_
+#endif //GFXMATH_VEC2
 
-#if defined(_VEC3_) || defined(_ALL_)
+#if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
 template <typename T>
 forcedinline const vec3<T> abs(const vec3<T>& a) noexcept { return { abs(a.x), abs(a.y), abs(a.z) }; }
 template <typename T>
@@ -2045,9 +2045,9 @@ template <typename T>
 forcedinline const vec3<T> floor(const vec3<T>& a) noexcept { return { floor(a.x), floor(a.y), floor(a.z) }; }
 template <typename T>
 forcedinline const vec3<T> ceil(const vec3<T>& a) noexcept { return { ceil(a.x), ceil(a.y), ceil(a.z) }; }
-#endif //_VEC3_
+#endif //GFXMATH_VEC3
 
-#if defined(_VEC4_) || defined(_ALL_)
+#if defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
 template <typename T>
 forcedinline const vec4<T> abs(const vec4<T>& a) noexcept { return { abs(a.x), abs(a.y), abs(a.z), abs(a.w) }; }
 template <typename T>
@@ -2086,9 +2086,9 @@ template <typename T>
 forcedinline const vec4<T> floor(const vec4<T>& a) noexcept { return { floor(a.x), floor(a.y), floor(a.z), floor(a.w) }; }
 template <typename T>
 forcedinline const vec4<T> ceil(const vec4<T>& a) noexcept { return { ceil(a.x), ceil(a.y), ceil(a.z), ceil(a.w) }; }
-#endif //_VEC4_
+#endif //GFXMATH_VEC4
 
-#if defined(_ARGB_) || defined(_ALL_)
+#if defined(GFXMATH_ARGB) || defined(GFXMATH_ALL)
 template <typename T>
 forcedinline const ARGB<T> abs(const ARGB<T>& a) noexcept { return abs(a.vcl); }
 template <typename T>
@@ -2115,7 +2115,7 @@ template <typename T>
 forcedinline const ARGB<T> floor(const ARGB<T>& a) noexcept { return floor(a.vcl); }
 template <typename T>
 forcedinline const ARGB<T> ceil(const ARGB<T>& a) noexcept { return ceil(a.vcl); }
-#endif //_ARGB_
+#endif //GFXMATH_ARGB
 
 template <typename T>
 forcedinline const T step(T a, T b) noexcept { return T(b >= a); }
@@ -2126,7 +2126,7 @@ forcedinline const T modulo(const T& a, const T& b) {  T t = a / b; return t - f
 static forcedinline float sign(float v) noexcept { *(uint32_t*)&v = (uint32_t(v < 0) << 31) | 0x3f800000U; return v; }
 static forcedinline double sign(double v) noexcept { *(uint64_t*)&v = (uint64_t(v < 0) << 63) | 0x3ff0000000000000UL; return v; }
 
-#if defined(_VEC2_) || defined(_ALL_)
+#if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
 template <int N> using vec2fN = vec2<Float_t<N>>;
 template <int N> using vec2dN = vec2<Double_t<N>>;
 
@@ -2146,9 +2146,9 @@ template <> struct Scalar<vec2d8> { using type = double; };
 
 template <typename T, int N> struct V2_TN { using type = vec2<Vector_t<T, N>>; };
 template <typename T, int N> using V2_t = typename V2_TN<T, N>::type;
-#endif //_VEC2_
+#endif //GFXMATH_VEC2
 
-#if defined(_VEC3_) || defined(_ALL_)
+#if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
 template <int N> using vec3fN = vec3<Float_t<N>>;
 template <int N> using vec3dN = vec3<Double_t<N>>;
 
@@ -2173,9 +2173,9 @@ forcedinline vec3d toDouble(vec3d v) noexcept { return v; }
 
 template <typename T, int N> struct V3_TN { using type = vec3<Vector_t<T, N>>; };
 template <typename T, int N> using V3_t = typename V3_TN<T, N>::type;
-#endif //_VEC3_
+#endif //GFXMATH_VEC3
 
-#if defined(_VEC4_) || defined(_ALL_)
+#if defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
 template <int N> using vec4fN = vec4<Float_t<N>>;
 template <int N> using vec4dN = vec4<Double_t<N>>;
 
@@ -2200,9 +2200,9 @@ forcedinline vec4d toDouble(vec4d v) noexcept { return v; }
 
 template <typename T, int N> struct V4_TN { using type = vec4<Vector_t<T, N>>; };
 template <typename T, int N> using V4_t = typename V4_TN<T, N>::type;
-#endif //_VEC4_
+#endif //GFXMATH_VEC4
 
-#if defined(_RGBA_) || defined(_ALL_)
+#if defined(GFXMATH_RGBA) || defined(GFXMATH_ALL)
 template <int N> using RGBfN = vec3<Float_t<N>>;
 template <int N> using RGBdN = vec3<Double_t<N>>;
 template <int N> using RGBAfN = vec4<Float_t<N>>;
@@ -2224,7 +2224,7 @@ using RGBAd8 = RGBAdN<8>;
 
 template <typename T, int N> using RGB_t = typename V3_TN<T, N>::type;
 template <typename T, int N> using RGBA_t = typename V4_TN<T, N>::type;
-#endif //_RGBA_
+#endif //GFXMATH_RGBA
 
 forcedinline float toFloat(float v) noexcept { return v; }
 forcedinline float4 toFloat(float4 v) noexcept { return v; }
@@ -2245,7 +2245,7 @@ auto to_type(F from)
         static_assert("Expected float or double");
 }
 
-#if defined(_VECN_) || defined(_ALL_)
+#if defined(GFXMATH_VECN) || defined(GFXMATH_ALL)
 template <typename... V>
 class vectorN
 {
@@ -2466,9 +2466,9 @@ template <size_t Size>
 using vecNf = vecNT<float, Size, 8, 4, 1>;
 template <size_t Size>
 using vecNd = vecNT<double, Size, 4, 1>;
-#endif //_VECN_
+#endif //GFXMATH_VECN
 
-#if defined(_VEC3_) || defined(_ALL_) && defined(_VEC4_) || defined(_ALL_)
+#if defined(GFXMATH_VEC3) && defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
 template <typename T>
 class Matrix4
 {
@@ -2951,7 +2951,7 @@ static forcedinline T hash11(T p)
     return fract(p);
 }
 
-#if defined(_VEC2_) || defined(_ALL_) && defined(_VEC3_) || defined(_ALL_)
+#if defined(GFXMATH_VEC2) && defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
 //  1 out, 2 in...
 template <typename T>
 static forcedinline T hash12(const vec2<T> p)
@@ -3000,7 +3000,7 @@ static forcedinline vec3<T> hash32(const vec2<T> p)
 }
 #endif
 
-#if defined(_VEC2_) || defined(_ALL_) && defined(_VEC4_) || defined(_ALL_)
+#if defined(GFXMATH_VEC2) && defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
 // 4 out, 2 in...
 template <typename T>
 static forcedinline vec4<T> hash42(const vec2<T> p)
@@ -3012,7 +3012,7 @@ static forcedinline vec4<T> hash42(const vec2<T> p)
 }
 #endif
 
-#if defined(_VEC3_) || defined(_ALL_) && defined(_VEC4_) || defined(_ALL_)
+#if defined(GFXMATH_VEC3) && defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
 // 4 out, 3 in...
 template <typename T>
 static forcedinline vec4<T> hash43(const vec3<T> p)
@@ -3023,7 +3023,7 @@ static forcedinline vec4<T> hash43(const vec3<T> p)
 }
 #endif
 
-#if defined(_VEC3_) || defined(_ALL_)
+#if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
 //  1 out, 3 in...
 template <typename T>
 static forcedinline T hash13(const vec3<T> p)
@@ -3053,7 +3053,7 @@ static forcedinline vec3<T> hash33(const vec3<T> p)
 }
 #endif
 
-#if defined(_VEC4_) || defined(_ALL_)
+#if defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
 // 4 out, 1 in...
 template <typename T>
 static forcedinline vec4<T> hash41(T p)
@@ -3074,7 +3074,7 @@ static forcedinline vec4<T> hash44(const vec4<T> p)
 }
 #endif
 
-#if defined(_VEC2_) || defined(_ALL_) && defined(_VEC3_) || defined(_ALL_) && defined(_VEC4_) || defined(_ALL_)
+#if defined(GFXMATH_VEC2) && defined(GFXMATH_VEC3) && defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
 template <typename T>
 forcedinline T gammaCorrect(T cl)
 {
@@ -3118,7 +3118,7 @@ forcedinline T inverseGammaCorrect(T cl)
 }
 #endif
 
-#if defined(_MAP2D_) || defined(_ALL_)
+#if defined(GFXMATH_MAP2D) || defined(GFXMATH_ALL)
 template <typename T>
 class Map2D
 {
