@@ -20,7 +20,6 @@
  * Preprocessor definitions.
  * --------------------------
  * GFXMATH_ALL
- * GFXMATH_JUCE
  * GFXMATH_VECN
  * GFXMATH_VEC2
  * GFXMATH_VEC3
@@ -747,10 +746,6 @@ public:
     template <typename FP>
     constexpr vec2(typename std::enable_if_t<!std::is_same_v<T, FP>&& std::is_floating_point_v<T>&& std::is_floating_point_v<FP>, const vec2<FP>&> v) : x(v.x), y(v.y) {}
 
-#if defined(GFXMATH_JUCE) || defined(GFXMATH_ALL)
-    constexpr vec2(const Point<Scalar>& v) : x(v.x), y(v.y) {}
-#endif
-
     template <typename AS>
     forcedinline operator vec2<AS>() const noexcept { return vec2<AS>{ AS(x), AS(y) }; }
 
@@ -929,11 +924,6 @@ public:
     constexpr vec3(const vec4<Scalar>& v) : x(v.x), y(v.y), z(v.z) {}
 #endif
     constexpr vec3(const Value& v) : value(v) {}
-
-#if defined(GFXMATH_JUCE) || defined(GFXMATH_ALL)
-    constexpr vec3(const Colour c) : vec3(c.getFloatRed(), c.getFloatGreen(), c.getFloatBlue()) {}
-    forcedinline operator Colour() const { return Colour::fromFloatRGBA(r, g, b, 1.0f); }
-#endif
 
     forcedinline void insert(int index, const vec3<Scalar>& value)
     {
@@ -1187,11 +1177,6 @@ public:
     template <typename FP>
     constexpr vec4(typename std::enable_if_t<!std::is_same_v<T, FP>&& std::is_floating_point_v<T>&& std::is_floating_point_v<FP>, const vec4<FP>&> v) : x(v.x), y(v.y), z(v.z), w(v.w) {}
     constexpr vec4(const T* v) { vcl.load_a(v); }
-
-#if defined(GFXMATH_JUCE) || defined(GFXMATH_ALL)
-    constexpr vec4(const Colour c) : vcl(c.getFloatRed(), c.getFloatGreen(), c.getFloatBlue(), c.getFloatAlpha()) {}
-    forcedinline operator Colour() const noexcept { return Colour::fromFloatRGBA(r, g, b, a); }
-#endif
 
     forcedinline vec4 withW(T ww) const noexcept { auto v = vec4(*this); v.vcl.insert(3, ww); return v; }
 
