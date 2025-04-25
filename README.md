@@ -1,4 +1,4 @@
-# DEXGfxMath
+# dex-gfxmath
 DigitalExpressions GfxMath core and utils code.
 Contains a couple of wrapper classes for VCL2 and FastMath util functions.
 
