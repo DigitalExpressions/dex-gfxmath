@@ -33,6 +33,7 @@
 #pragma once
 
 #include <cassert>
+#include <chrono>
 
 // 4127=conditional expression is constant, 4702=Unreachable code, 4201=anonymous struct
 #if defined(_MSC_VER)
