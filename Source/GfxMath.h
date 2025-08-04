@@ -1284,6 +1284,16 @@ public:
         auto len = length();
         return *this / (len == 0.0f ? Epsilon<Scalar> : len);
     }
+    forcedinline vec4<T> lerp(const vec4<T> targetvec, T val) noexcept 
+    { 
+        return *this + val * (targetvec - *this);
+    }
+    forcedinline vec4<T> nlerp(const vec4<T> targetvec, T val) noexcept
+    {
+        vec4<T> vec = *this + val * (targetvec - *this);
+        vec.normalizex();
+        return vec;
+    }
     forcedinline vec4<T> slerp(const vec4<T> targetvec, T val) noexcept
     {
         (*this).w = T(0);
