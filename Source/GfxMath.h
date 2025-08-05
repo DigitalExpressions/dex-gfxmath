@@ -1270,6 +1270,8 @@ public:
     forcedinline T prod() const noexcept { return x * y * z * w; }
     forcedinline T length() const noexcept { return sqrt(dot(*this)); }
     forcedinline T lengthSquared() const noexcept { return dot(*this); }
+    forcedinline T distance(const vec4<T> v) const noexcept { return vec4<T>(vcl - v.vcl).length(); }
+    forcedinline T distanceSquared(const vec4<T> v) const noexcept { return vec4<T>(vcl - v.vcl).lengthSquared(); }
     forcedinline vec4& normalize() noexcept { auto lr = 1.0f / (length() + Epsilon<Scalar>); vcl *= lr; return *this; }
     forcedinline vec4 normalized() const noexcept { auto lr = 1.0f / (length() + Epsilon<Scalar>); return *this * lr; }
     forcedinline vec4& normalizex() noexcept
@@ -1741,6 +1743,24 @@ public:
     forcedinline vec4<T> get() const noexcept { assert(max(A0, A1, A2, A3) < size()); return { value._[A0], value._[A1], value._[A2], value._[A3] }; }
     template <int A0, int A1, int A2, int A3> 
     forcedinline void set(T a0, T a1, T a2, T a3) const noexcept { assert(max(A0, A1, A2, A3) < size()); value._[A0] = a0; value._[A1] = a1; value._[A2] = a2; value._[A3] = a3; }
+
+    /**
+     * Stores vec4 into arr
+     */
+    forcedinline void store(T* arr) const noexcept { value.store(arr); }
+    forcedinline void store_a(T* arr) const noexcept { value.store_a(arr); }
+
+    /**
+     * Loads arr into vec4
+     */
+    forcedinline void load(T* arr) const noexcept { value.load(arr); }
+    forcedinline void load_a(T* arr) const noexcept { value.load_a(arr); }
+
+    /**
+     * Loads double arr[4] into vec4f
+     */
+    template <typename F = float>
+    forcedinline void load(typename std::enable_if_t<std::is_same_v<T, F>, const double*> arr) noexcept { assert(((arr + 1) - arr) < size()); x = arr[0]; y = arr[1]; z = arr[2]; w = arr[3]; }
 
     static constexpr int elementtype()
     {
@@ -2838,6 +2858,17 @@ public:
             + col1 * permute4<1, 1, 1, 1>(v.vcl)
             + col2 * permute4<2, 2, 2, 2>(v.vcl)
             + col3 * permute4<3, 3, 3, 3>(v.vcl);
+    }
+
+    forcedinline vec4<T> multiply(vec4<T> v, T& setw) const
+    {
+        vec4<T> vec = col0 * permute4<0, 0, 0, 0>(v.vcl) 
+            + col1 * permute4<1, 1, 1, 1>(v.vcl)
+            + col2 * permute4<2, 2, 2, 2>(v.vcl)
+            + col3 * permute4<3, 3, 3, 3>(v.vcl);
+
+        vec.w = setw;
+        return vec;
     }
 
     forcedinline Matrix4& multiply(const Matrix4& other)
