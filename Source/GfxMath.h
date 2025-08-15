@@ -2967,6 +2967,187 @@ using Matrix4f = Matrix4<float>;
 using Matrix4d = Matrix4<double>;
 #endif //Matrix4
 
+//Quaternion online verification tool https://tools.glowbuzzer.com/rotationconverter
+template <typename T>
+class Quaternion
+{
+public:    
+    union
+    {
+        vec4<T> q;  // (x, y, z, w), with w as scalar part
+        struct { T x, y, z, w; };
+    };
+
+    // Constructors
+    Quaternion() : q(vec4<T>(0, 0, 0, 1)) {}
+    Quaternion(const vec4<T>& v) : q(v) {}
+    Quaternion(T x, T y, T z, T w) : q(vec4<T>(x, y, z, w)) {}
+    Quaternion(const Quaternion& quat) : q(quat.q) {}
+
+    // Static factory: from axis-angle (axis must be normalized, angle in radians)
+    forcedinline static Quaternion fromAxisAngle(const vec4<T>& axis, T angle)
+    {
+        vec4<T> s(std::sin(angle * T(0.5)));
+        vec4<T> c(std::cos(angle * T(0.5)));
+        vec4<T> xyz(axis * s);
+        
+        return Quaternion(vec4<T>(xyz.x, xyz.y, xyz.z, c.x));
+    }
+
+    // Normalize this quaternion to unit length
+    forcedinline Quaternion& normalize() noexcept { q.normalize(); return *this; }
+    forcedinline Quaternion normalized() const noexcept { return q.normalized(); }
+    forcedinline Quaternion& normalizex() noexcept { q.normalizex(); return *this; }
+    forcedinline Quaternion normalizedx() const noexcept { return q.normalizedx(); }
+
+    // Quaternion multiplication: this = this * other
+    forcedinline Quaternion operator*(const Quaternion& other) const
+    {
+        vec4<T> res;
+        res[0] = w * other.x + x * other.w + y * other.z - z * other.y;
+        res[1] = w * other.y - x * other.z + y * other.w + z * other.x;
+        res[2] = w * other.z + x * other.y - y * other.x + z * other.w;
+        res[3] = w * other.w - x * other.x - y * other.y - z * other.z;
+        return Quaternion(res);
+    }
+
+    forcedinline Quaternion& operator=(const Quaternion& other)
+    {
+        q = other.q;
+        return *this;
+    }
+
+    // Rotate a vec4 (as 3D vector in xyzw) by this quaternion
+    // 1 million calls (microseconds)
+    // AVX2 ~2000, AVX ~2400, SSE2 ~2400, SSE ~2400
+    // https://blog.molecular-matters.com/2013/05/24/a-faster-quaternion-vector-multiplication/
+    forcedinline vec4<T> rotate(const vec4<T>& vec) const
+    {
+        vec4<T> qv(x, y, z, T(0.0));
+        vec4<T> v = T(2.0) * qv.cross(vec);
+        vec4<T> vp = vec + w * v + qv.cross(v);        
+        return vp;
+    }
+
+    // Rotate a vec4 (as 3D vector in xyzw) by this quaternion
+    // 1 million calls (microseconds)
+    // AVX2 ~1300, AVX ~1300, SSE2 ~21000, SSE ~1300
+    // https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
+    forcedinline vec4<T> rotate1(const vec4<T>& vec) const
+    {
+        vec4<T> qv(x, y, z, T(0.0));
+        vec4<T> vp = T(2.0) * qv.dot(vec) * qv + (T(2.0) * q.w * q.w - T(1.0)) * vec + T(2.0) * q.w * qv.cross(vec);
+        return vp;
+    }
+
+    // Inverse of unit quaternion
+    forcedinline Quaternion inverse() const
+    {
+        return Quaternion(-x, -y, -z, w);
+    }
+
+    // Inverse of a non-unit quaternion
+    forcedinline Quaternion inversen() const
+    {
+        vec4<T> conj(-q.x, -q.y, -q.z, q.w);
+        vec4<T> sq = q * q;
+        T l2 = sq.x + sq.y + sq.z + sq.w;
+        return Quaternion(conj/vec4<T>(l2));
+    }
+
+    //Convert quaternion to 3×3 rotation matrix (aligned with VCL usage)
+    //Mat3f toRotationMatrix() const 
+    // {
+    //    
+    //    T xx = v.x * v.x;
+    //    T yy = v.y * v.y;
+    //    T zz = v.z * v.z;
+    //    T xy = v.x * v.y;
+    //    T xz = v.x * v.z;
+    //    T yz = v.y * v.z;
+    //    T wx = v.w * v.x;
+    //    T wy = v.w * v.y;
+    //    T wz = v.w * v.z;
+
+    //    Mat3f m;
+    //    m.rows[0] = Vec3f(1.0f - 2.0f * (yy + zz), 2.0f * (xy - wz), 2.0f * (xz + wy));
+    //    m.rows[1] = Vec3f(2.0f * (xy + wz), 1.0f - 2.0f * (xx + zz), 2.0f * (yz - wx));
+    //    m.rows[2] = Vec3f(2.0f * (xz - wy), 2.0f * (yz + wx), 1.0f - 2.0f * (xx + yy));
+
+    //    return m;
+    //}
+
+    // Spherical linear interpolation from *this to target
+    forcedinline Quaternion& slerp(const Quaternion<T>& target, T t)
+    {
+        vec4<T> cosphi = q * target.q;
+        T dot = cosphi.x + cosphi.y + cosphi.z + cosphi.w;
+
+        Quaternion qb2 = target;
+        if (dot < 0.0f) {  // invert to take shortest path
+            dot = -dot;
+            qb2.q = -qb2.q;
+        }
+
+        const T DOT_THRESHOLD = 0.9995f;
+        if (dot > DOT_THRESHOLD) {
+            // Linear fallback
+            vec4<T> vl(q + (qb2.q - q) * vec4<T>(t));
+            Quaternion result(vl);
+            result.normalize();
+            return result;
+        }
+
+        T theta_0 = std::acos(dot);
+        T theta = theta_0 * t;
+        T sin_theta = std::sin(theta), sin_theta_0 = std::sin(theta_0);
+
+        vec4<T> s0(std::cos(theta) - dot * sin_theta / sin_theta_0);
+        vec4<T> s1(sin_theta / sin_theta_0);
+
+        vec4<T> res(q * s0 + qb2.q * s1);
+        q = res;
+        q.normalize();
+        return *this;
+    }
+
+    // Spherical linear interpolation from a to b
+    forcedinline static Quaternion slerp(const Quaternion<T>& a, const Quaternion<T>& b, T t)
+    {
+        vec4<T> cosphi = a.q * b.q;
+        T dot = cosphi.x + cosphi.y + cosphi.z + cosphi.w;
+
+        Quaternion qb2 = b;
+        if (dot < 0.0f) {  // invert to take shortest path
+            dot = -dot;
+            qb2.q = -qb2.q;
+        }
+
+        const T DOT_THRESHOLD = 0.9995f;
+        if (dot > DOT_THRESHOLD) {
+            // Linear fallback
+            vec4<T> vl(a.q + (qb2.q - a.q) * vec4<T>(t));
+            Quaternion result(vl);
+            result.normalize();
+            return result;
+        }
+
+        T theta_0 = std::acos(dot);
+        T theta = theta_0 * t;
+        T sin_theta = std::sin(theta), sin_theta_0 = std::sin(theta_0);
+
+        vec4<T> s0(std::cos(theta) - dot * sin_theta / sin_theta_0);
+        vec4<T> s1(sin_theta / sin_theta_0);
+
+        vec4<T> res(a.q * s0 + qb2.q * s1);
+        Quaternion result(res);
+        result.normalize();
+        return result;
+    }
+};
+
+using Quatf = Quaternion<float>;
+using Quatd = Quaternion<double>;
 
 //  1 out, 1 in...
 template <typename T>
