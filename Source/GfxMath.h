@@ -3146,8 +3146,8 @@ public:
     }
 };
 
-using Quatf = Quaternion<float>;
-using Quatd = Quaternion<double>;
+using Quatf = ::Quaternion<float>;
+using Quatd = ::Quaternion<double>;
 
 //  1 out, 1 in...
 template <typename T>
