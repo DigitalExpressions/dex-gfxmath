@@ -2968,7 +2968,7 @@ using Matrix4d = Matrix4<double>;
 #endif //Matrix4
 
 //Quaternion online verification tool https://tools.glowbuzzer.com/rotationconverter
-template <typename T>
+template <typename T=float>
 class Quaternion
 {
 public:    
@@ -2994,21 +2994,32 @@ public:
         return Quaternion(vec4<T>(xyz.x, xyz.y, xyz.z, c.x));
     }
 
-    // Normalize this quaternion to unit length
+    // Normalize this quaternion to unit length, uses vec4.normalize()
     forcedinline Quaternion& normalize() noexcept { q.normalize(); return *this; }
     forcedinline Quaternion normalized() const noexcept { return q.normalized(); }
     forcedinline Quaternion& normalizex() noexcept { q.normalizex(); return *this; }
     forcedinline Quaternion normalizedx() const noexcept { return q.normalizedx(); }
 
     // Quaternion multiplication: this = this * other
-    forcedinline Quaternion operator*(const Quaternion& other) const
+    forcedinline Quaternion<T> operator*(const Quaternion<T>& other) const
     {
         vec4<T> res;
-        res[0] = w * other.x + x * other.w + y * other.z - z * other.y;
-        res[1] = w * other.y - x * other.z + y * other.w + z * other.x;
-        res[2] = w * other.z + x * other.y - y * other.x + z * other.w;
-        res[3] = w * other.w - x * other.x - y * other.y - z * other.z;
+        res.x = w * other.x + x * other.w + y * other.z - z * other.y;
+        res.y = w * other.y - x * other.z + y * other.w + z * other.x;
+        res.z = w * other.z + x * other.y - y * other.x + z * other.w;
+        res.w = w * other.w - x * other.x - y * other.y - z * other.z;
         return Quaternion(res);
+    }
+
+    vec4<T> operator*(const vec4<T>& vec) const {
+        // Treat vector as quaternion (x,y,z,0)
+        Quaternion qvec(vec.x, vec.y, vec.z, T(0.0));
+
+        // Multiply: this * qvec * inverse(this)
+        Quaternion res = (*this) * qvec * this->inverse();
+
+        // Return rotated vector (x,y,z,0)
+        return res.q;
     }
 
     forcedinline Quaternion& operator=(const Quaternion& other)
@@ -3021,7 +3032,7 @@ public:
     // 1 million calls (microseconds)
     // AVX2 ~2000, AVX ~2400, SSE2 ~2400, SSE ~2400
     // https://blog.molecular-matters.com/2013/05/24/a-faster-quaternion-vector-multiplication/
-    forcedinline vec4<T> rotate(const vec4<T>& vec) const
+    forcedinline vec4<T> rotateSSE2(const vec4<T>& vec) const
     {
         vec4<T> qv(x, y, z, T(0.0));
         vec4<T> v = T(2.0) * qv.cross(vec);
@@ -3031,9 +3042,9 @@ public:
 
     // Rotate a vec4 (as 3D vector in xyzw) by this quaternion
     // 1 million calls (microseconds)
-    // AVX2 ~1300, AVX ~1300, SSE2 ~21000, SSE ~1300
+    // AVX2 ~1300, AVX ~1300, SSE2 ~21000, SSE ~1300 (SSE2 is a mystery)
     // https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
-    forcedinline vec4<T> rotate1(const vec4<T>& vec) const
+    forcedinline vec4<T> rotate(const vec4<T>& vec) const
     {
         vec4<T> qv(x, y, z, T(0.0));
         vec4<T> vp = T(2.0) * qv.dot(vec) * qv + (T(2.0) * q.w * q.w - T(1.0)) * vec + T(2.0) * q.w * qv.cross(vec);
@@ -3041,13 +3052,13 @@ public:
     }
 
     // Inverse of unit quaternion
-    forcedinline Quaternion inverse() const
+    forcedinline Quaternion inverseUnitQ() const
     {
         return Quaternion(-x, -y, -z, w);
     }
 
     // Inverse of a non-unit quaternion
-    forcedinline Quaternion inversen() const
+    forcedinline Quaternion inverse() const
     {
         vec4<T> conj(-q.x, -q.y, -q.z, q.w);
         vec4<T> sq = q * q;
