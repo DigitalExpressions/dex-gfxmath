@@ -907,8 +907,9 @@ public:
         struct { T x, y, z; };
         struct { T u, v, w; };
         struct { T r, g, b; };
-        T array[3];
         Value value;
+        T array[3];
+        Vector_t<T, 4> vcl;
     };
 
     constexpr vec3() : x(0.0f), y(0.0f), z(0.0f) {}
@@ -1107,6 +1108,24 @@ public:
     forcedinline vec3<T> get() const noexcept { assert(max(A0, A1, A2) < size()); return { value._[A0], value._[A1], value._[A2] }; }
     template <int A0, int A1, int A2>
     forcedinline void set(T a0, T a1, T a2) const noexcept { assert(max(A0, A1, A2) < size()); value._[A0] = a0; value._[A1] = a1; value._[A2] = a2; }
+
+    /**
+     * Stores vec3 into arr
+     */
+    forcedinline void store(T* arr) const noexcept { vcl.store(arr); }
+    forcedinline void store_a(T* arr) const noexcept { vcl.store_a(arr); }
+
+    /**
+     * Loads arr into vec3
+     */
+    forcedinline void load(T* arr) const noexcept { vcl.load(arr); }
+    forcedinline void load_a(T* arr) const noexcept { vcl.load_a(arr); }
+
+    /**
+     * Loads double arr[3] into vec4f
+     */
+    template <typename F = float>
+    forcedinline void load(typename std::enable_if_t<std::is_same_v<T, F>, const double*> arr) noexcept { assert(((arr + 1) - arr) < size()); x = arr[0]; y = arr[1]; z = arr[2]; }
 
     static constexpr int elementtype()
     {
@@ -1747,14 +1766,16 @@ public:
     /**
      * Stores vec4 into arr
      */
-    forcedinline void store(T* arr) const noexcept { value.store(arr); }
-    forcedinline void store_a(T* arr) const noexcept { value.store_a(arr); }
+    forcedinline void store(T* arr) const noexcept { vcl.store(arr); }
+    forcedinline void store_a(T* arr) const noexcept { vcl.store_a(arr); }
+    forcedinline void store_partial(int n, T* arr) const noexcept { vcl.store_partial(n, arr); }
 
     /**
      * Loads arr into vec4
      */
-    forcedinline void load(T* arr) const noexcept { value.load(arr); }
-    forcedinline void load_a(T* arr) const noexcept { value.load_a(arr); }
+    forcedinline void load(T* arr) const noexcept { vcl.load(arr); }
+    forcedinline void load_a(T* arr) const noexcept { vcl.load_a(arr); }
+    forcedinline vec4<T>& load_partial(int n, T* arr) { vcl.load_partial(n, arr); return *this; }
 
     /**
      * Loads double arr[4] into vec4f
