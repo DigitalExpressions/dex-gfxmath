@@ -285,6 +285,7 @@ namespace dex
 	template <typename T, int Size> struct Vector { using type = void; };
 	template <int Size> struct Vector<float, Size> { using type = Float_t<Size>; };
 	template <int Size> struct Vector<double, Size> { using type = Double_t<Size>; };
+	template <int Size> struct Vector<Vec4f, Size> { using type = Vec4f; };
 	template <typename T, int Size> using Vector_t = typename Vector<T, Size>::type;
 
 	template <int ElementType> struct ScalarElement { using type = void; };
@@ -480,8 +481,8 @@ namespace dex
 				if (m[11] != 0) dest[11] = src[11];
 				if (m[12] != 0) dest[12] = src[12];
 				if (m[13] != 0) dest[13] = src[13];
-				if (m[14] != 0) dest[12] = src[14];
-				if (m[15] != 0) dest[13] = src[15];
+            if (m[14] != 0) dest[14] = src[14];
+            if (m[15] != 0) dest[15] = src[15];
 			}
 		}
 		else if (mask)
@@ -518,8 +519,8 @@ namespace dex
 				if (m[11] != 0) dest[11] = src;
 				if (m[12] != 0) dest[12] = src;
 				if (m[13] != 0) dest[13] = src;
-				if (m[14] != 0) dest[12] = src;
-				if (m[15] != 0) dest[13] = src;
+            if (m[14] != 0) dest[14] = src;
+            if (m[15] != 0) dest[15] = src;
 			}
 		}
 		else if (mask)
@@ -954,8 +955,8 @@ namespace dex
 			return (vec2{ u, v } - 0.5f).normalized();
 		}
 
-		forcedinline vec2<T> xy() const noexcept { return { x, y }; }   forcedinline vec2<T> uu() const noexcept { return { x, y }; }
-		forcedinline vec2<T> xx() const noexcept { return { x, x }; }   forcedinline vec2<T> uv() const noexcept { return { x, x }; }
+    forcedinline vec2<T> xy() const noexcept { return { x, y }; }   forcedinline vec2<T> uu() const noexcept { return { x, x }; }
+    forcedinline vec2<T> xx() const noexcept { return { x, x }; }   forcedinline vec2<T> uv() const noexcept { return { x, y }; }
 		forcedinline vec2<T> yx() const noexcept { return { y, x }; }   forcedinline vec2<T> vu() const noexcept { return { y, x }; }
 		forcedinline vec2<T> yy() const noexcept { return { y, y }; }   forcedinline vec2<T> vv() const noexcept { return { y, y }; }
 
@@ -1184,7 +1185,7 @@ namespace dex
 		forcedinline vec3<T> xyz() const noexcept { return { x, y, z }; }   forcedinline vec3<T> rgb() const noexcept { return { r, g, b }; }   forcedinline vec3<T> uvw() const noexcept { return { x, y, z }; }
 		forcedinline vec3<T> xzx() const noexcept { return { x, z, x }; }   forcedinline vec3<T> rbr() const noexcept { return { r, b, r }; }   forcedinline vec3<T> uwu() const noexcept { return { x, z, x }; }
 		forcedinline vec3<T> xzy() const noexcept { return { x, z, y }; }   forcedinline vec3<T> rbg() const noexcept { return { r, b, g }; }   forcedinline vec3<T> uwv() const noexcept { return { x, z, y }; }
-		forcedinline vec3<T> xzz() const noexcept { return { y, z, z }; }   forcedinline vec3<T> rbb() const noexcept { return { g, b, b }; }   forcedinline vec3<T> uww() const noexcept { return { y, z, z }; }
+    forcedinline vec3<T> xzz() const noexcept { return { x, z, z }; }   forcedinline vec3<T> rbb() const noexcept { return { r, b, b }; }   forcedinline vec3<T> uww() const noexcept { return { x, z, z }; }
 		forcedinline vec3<T> yxx() const noexcept { return { y, x, x }; }   forcedinline vec3<T> grr() const noexcept { return { g, r, r }; }   forcedinline vec3<T> vuu() const noexcept { return { y, x, x }; }
 		forcedinline vec3<T> yxy() const noexcept { return { y, x, y }; }   forcedinline vec3<T> grg() const noexcept { return { g, r, g }; }   forcedinline vec3<T> vuv() const noexcept { return { y, x, y }; }
 		forcedinline vec3<T> yxz() const noexcept { return { y, x, z }; }   forcedinline vec3<T> grb() const noexcept { return { g, r, b }; }   forcedinline vec3<T> vuw() const noexcept { return { y, x, z }; }
@@ -1193,7 +1194,7 @@ namespace dex
 		forcedinline vec3<T> yyz() const noexcept { return { y, y, z }; }   forcedinline vec3<T> ggb() const noexcept { return { g, g, b }; }   forcedinline vec3<T> vvw() const noexcept { return { y, y, z }; }
 		forcedinline vec3<T> yzx() const noexcept { return { y, z, x }; }   forcedinline vec3<T> gbr() const noexcept { return { g, b, r }; }   forcedinline vec3<T> vwu() const noexcept { return { y, z, x }; }
 		forcedinline vec3<T> yzy() const noexcept { return { y, z, y }; }   forcedinline vec3<T> gbg() const noexcept { return { g, b, g }; }   forcedinline vec3<T> vwv() const noexcept { return { y, z, y }; }
-		forcedinline vec3<T> yzz() const noexcept { return { z, z, z }; }   forcedinline vec3<T> gbb() const noexcept { return { b, b, b }; }   forcedinline vec3<T> vww() const noexcept { return { z, z, z }; }
+    forcedinline vec3<T> yzz() const noexcept { return { y, z, z }; }   forcedinline vec3<T> gbb() const noexcept { return { g, b, b }; }   forcedinline vec3<T> vww() const noexcept { return { y, z, z }; }
 		forcedinline vec3<T> zxx() const noexcept { return { z, x, x }; }   forcedinline vec3<T> brr() const noexcept { return { b, r, r }; }   forcedinline vec3<T> wuu() const noexcept { return { z, x, x }; }
 		forcedinline vec3<T> zxy() const noexcept { return { z, x, y }; }   forcedinline vec3<T> brg() const noexcept { return { b, r, g }; }   forcedinline vec3<T> wuv() const noexcept { return { z, x, y }; }
 		forcedinline vec3<T> zxz() const noexcept { return { z, x, z }; }   forcedinline vec3<T> brb() const noexcept { return { b, r, b }; }   forcedinline vec3<T> wuw() const noexcept { return { z, x, z }; }
@@ -1427,12 +1428,13 @@ namespace dex
 		}
 		forcedinline vec4<T> slerp(const vec4<T> targetvec, T val) noexcept
 		{
-			(*this).w = T(0);
-			T dot = clamp((*this).dot(targetvec), T(-1.0), T(1.0));
+        vec4<T> from = *this;
+        from.w = T(0);
+        T dot = clamp(from.dot(targetvec), T(-1.0), T(1.0));
 			T theta = acos(dot) * val;
-			vec4<T> relvec = (targetvec - *this * dot);
+        vec4<T> relvec = (targetvec - from * dot);
 			relvec.normalizex();
-			return ((*this * std::cos(theta)) + (relvec * std::sin(theta)));
+        return (from * std::cos(theta)) + (relvec * std::sin(theta));
 		}
 		forcedinline vec4 limit(float lim = 1.0f) const noexcept
 		{
@@ -1545,12 +1547,12 @@ namespace dex
 		forcedinline vec3<T> xyw() const noexcept { return { x, y, w }; }       forcedinline vec3<T> arb() const noexcept { return { a, r, b }; }
 		forcedinline vec3<T> xzx() const noexcept { return { x, z, x }; }       forcedinline vec3<T> aga() const noexcept { return { a, g, a }; }
 		forcedinline vec3<T> xzy() const noexcept { return { x, z, y }; }       forcedinline vec3<T> agr() const noexcept { return { a, g, r }; }
-		forcedinline vec3<T> xzz() const noexcept { return { y, z, z }; }       forcedinline vec3<T> agg() const noexcept { return { r, g, g }; }
-		forcedinline vec3<T> xzw() const noexcept { return { y, z, w }; }       forcedinline vec3<T> agb() const noexcept { return { r, g, b }; }
+    forcedinline vec3<T> xzz() const noexcept { return { x, z, z }; }       forcedinline vec3<T> agg() const noexcept { return { a, g, g }; }
+    forcedinline vec3<T> xzw() const noexcept { return { x, z, w }; }       forcedinline vec3<T> agb() const noexcept { return { a, g, b }; }
 		forcedinline vec3<T> xwx() const noexcept { return { x, w, x }; }       forcedinline vec3<T> aba() const noexcept { return { a, b, a }; }
 		forcedinline vec3<T> xwy() const noexcept { return { x, w, y }; }       forcedinline vec3<T> abr() const noexcept { return { a, b, r }; }
-		forcedinline vec3<T> xwz() const noexcept { return { y, w, z }; }       forcedinline vec3<T> abg() const noexcept { return { r, b, g }; }
-		forcedinline vec3<T> xww() const noexcept { return { y, w, w }; }       forcedinline vec3<T> abb() const noexcept { return { r, b, b }; }
+    forcedinline vec3<T> xwz() const noexcept { return { x, w, z }; }       forcedinline vec3<T> abg() const noexcept { return { a, b, g }; }
+    forcedinline vec3<T> xww() const noexcept { return { x, w, w }; }       forcedinline vec3<T> abb() const noexcept { return { a, b, b }; }
 		forcedinline vec3<T> yxx() const noexcept { return { y, x, x }; }       forcedinline vec3<T> raa() const noexcept { return { r, a, a }; }
 		forcedinline vec3<T> yxy() const noexcept { return { y, x, y }; }       forcedinline vec3<T> rar() const noexcept { return { r, a, r }; }
 		forcedinline vec3<T> yxz() const noexcept { return { y, x, z }; }       forcedinline vec3<T> rag() const noexcept { return { r, a, g }; }
@@ -1561,12 +1563,12 @@ namespace dex
 		forcedinline vec3<T> yyw() const noexcept { return { y, y, w }; }       forcedinline vec3<T> rrb() const noexcept { return { r, r, b }; }
 		forcedinline vec3<T> yzx() const noexcept { return { y, z, x }; }       forcedinline vec3<T> rga() const noexcept { return { r, g, a }; }
 		forcedinline vec3<T> yzy() const noexcept { return { y, z, y }; }       forcedinline vec3<T> rgr() const noexcept { return { r, g, r }; }
-		forcedinline vec3<T> yzz() const noexcept { return { z, z, z }; }       forcedinline vec3<T> rgg() const noexcept { return { g, g, g }; }
-		forcedinline vec3<T> yzw() const noexcept { return { z, z, w }; }       forcedinline vec3<T> rgb() const noexcept { return { g, g, b }; }
+    forcedinline vec3<T> yzz() const noexcept { return { y, z, z }; }       forcedinline vec3<T> rgg() const noexcept { return { r, g, g }; }
+    forcedinline vec3<T> yzw() const noexcept { return { y, z, w }; }       forcedinline vec3<T> rgb() const noexcept { return { r, g, b }; }
 		forcedinline vec3<T> ywx() const noexcept { return { y, w, x }; }       forcedinline vec3<T> rba() const noexcept { return { r, b, a }; }
 		forcedinline vec3<T> ywy() const noexcept { return { y, w, y }; }       forcedinline vec3<T> rbr() const noexcept { return { r, b, r }; }
-		forcedinline vec3<T> ywz() const noexcept { return { z, w, z }; }       forcedinline vec3<T> rbg() const noexcept { return { g, b, g }; }
-		forcedinline vec3<T> yww() const noexcept { return { z, w, w }; }       forcedinline vec3<T> rbb() const noexcept { return { g, b, b }; }
+    forcedinline vec3<T> ywz() const noexcept { return { y, w, z }; }       forcedinline vec3<T> rbg() const noexcept { return { r, b, g }; }
+    forcedinline vec3<T> yww() const noexcept { return { y, w, w }; }       forcedinline vec3<T> rbb() const noexcept { return { r, b, b }; }
 		forcedinline vec3<T> zxx() const noexcept { return { z, x, x }; }       forcedinline vec3<T> gaa() const noexcept { return { g, a, a }; }
 		forcedinline vec3<T> zxy() const noexcept { return { z, x, y }; }       forcedinline vec3<T> gar() const noexcept { return { g, a, r }; }
 		forcedinline vec3<T> zxz() const noexcept { return { z, x, z }; }       forcedinline vec3<T> gag() const noexcept { return { g, a, g }; }
@@ -2033,13 +2035,13 @@ namespace dex
 	forcedinline const vec4<T> operator/(T a, const vec4<T>& b) noexcept
 	{
 		auto m = T(1) / std::numeric_limits<Scalar_t<T>>::epsilon();
-		return { select(b.x != 0, a / b.x, m), select(b.y != 0, a / b.y, m), select(b.z != 0, a / b.z, m), select(b.z != 0, a / b.w, m) };
+		return { select(b.x != 0, a / b.x, m), select(b.y != 0, a / b.y, m), select(b.z != 0, a / b.z, m), select(b.w != 0, a / b.w, m) };
 	}
 
 	template <typename T>
-	forcedinline const vec4<T> min(const vec4<T>& a, const vec4<T>& b) noexcept { return { min(a.x, b.x), min(a.y, b.y), min(a.z, b.z), min(a.w, b.w) }; }
+	forcedinline const vec4<T> min(const vec4<T>& a, const vec4<T>& b) noexcept { return { min(a.vcl, b.vcl) }; }
 	template <typename T>
-	forcedinline const vec4<T> min(const vec4<T>& a, T b) noexcept { return { min(a.x, b), min(a.y, b), min(a.z, b), min(a.w, b) }; }
+	forcedinline const vec4<T> min(const vec4<T>& a, T b) noexcept { return { min(a.vcl, b) }; }
 	template <typename T>
 	forcedinline const T horizontal_min(const vec4<T>& a) noexcept { return horizontal_min(a.vcl); }
 	template <typename T>
@@ -3261,10 +3263,9 @@ namespace dex
 			const T DOT_THRESHOLD = 0.9995f;
 			if (dot > DOT_THRESHOLD) {
 				// Linear fallback
-				vec4<T> vl(q + (qb2.q - q) * vec4<T>(t));
-				Quaternion result(vl);
-				result.normalize();
-				return result;
+            q = q + (qb2.q - q) * vec4<T>(t);
+            normalize();
+            return *this;
 			}
 
 			T theta_0 = std::acos(dot);
@@ -3353,7 +3354,7 @@ namespace dex
 	static forcedinline vec2<T> hash22(const vec2<T> p)
 	{
 		vec3<T> p3 = fract(vec3<T>(p.xyx()) * vec3<T>(T(0.1031f), T(0.1030f), T(0.0973f)));
-		p3 += p3.dot(p3.yzx + T(33.33f));
+		p3 += p3.dot(p3.yzx() + T(33.33f));
 		return fract((p3.xx() + p3.yz()) * p3.zy());
 
 	}
@@ -3363,7 +3364,7 @@ namespace dex
 	static forcedinline vec2<T> hash23(const vec3<T> p)
 	{
 		vec3<T> p3 = fract(p * vec3<T>(T(0.1031f), T(0.1030f), T(0.0973f)));
-		p3 += p3.dot(p.yzx() + T(33.33f));
+		p3 += p3.dot(p3.yzx() + T(33.33f));
 		return fract((p3.xx() + p3.yz()) * p3.zy());
 	}
 
@@ -3502,7 +3503,7 @@ namespace dex
 	public:
 		Map2D() = default;
 		Map2D(T* dataArray, int xDim, int yDim, T defaultValue = {}) :
-			data(data), xdim(xDim), ydim(yDim), defValue(defaultValue)
+			data(dataArray), xdim(xDim), ydim(yDim), defValue(defaultValue)
 		{
 		}
 
