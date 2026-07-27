@@ -3460,7 +3460,7 @@ namespace dex
 		constexpr float b = 1.0f / 2.2f;
 		if constexpr (std::is_floating_point_v<T>)
 			// return approx_sqrt(cl);
-			return pow(cl, b);
+			return std::pow(cl, b);
 		// return select(cl <= 0.0031308f, 12.92f * cl, 1.055f * pow(cl, 1.0f / 2.4f) - 0.055f);
 		else if constexpr (std::is_base_of_v<vec4<float>, T>)
 			return T(std::pow(cl.r, b), std::pow(cl.g, b), std::pow(cl.b, b), cl.a);
@@ -3481,7 +3481,7 @@ namespace dex
 		constexpr float b = 2.2f;
 		if constexpr (std::is_floating_point_v<T>)
 			// return cl * cl;
-			return pow(cl, b);
+			return std::pow(cl, b);
 		// return select(cl <= 0.04045f, cl * 1.0f / 12.92f, std::pow((cl + 0.055f) * 1.0f / 1.055f, 2.4f));
 		else if constexpr (std::is_base_of_v<vec4<float>, T>)
 			return T(std::pow(cl.r, b), std::pow(cl.g, b), std::pow(cl.b, b), cl.a);
