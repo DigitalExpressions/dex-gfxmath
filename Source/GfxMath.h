@@ -34,6 +34,7 @@
 
 #include <cassert>
 #include <chrono>
+#include <cmath>
 #include <random>
 
   // 4127=conditional expression is constant, 4702=Unreachable code, 4201=anonymous struct
@@ -2116,15 +2117,15 @@ namespace dex
 
 #if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
 	template <typename T>
-	forcedinline const vec2<T> abs(const vec2<T>& a) noexcept { return { abs(a.x), abs(a.y) }; }
+	forcedinline const vec2<T> abs(const vec2<T>& a) noexcept { return { std::abs(a.x), std::abs(a.y) }; }
 	template <typename T>
-	forcedinline const vec2<T> exp(const vec2<T>& a) noexcept { return { exp(a.x), exp(a.y) }; }
+	forcedinline const vec2<T> exp(const vec2<T>& a) noexcept { return { std::exp(a.x), std::exp(a.y) }; }
 	template <typename T>
-	forcedinline const vec2<T> sqrt(const vec2<T>& a) noexcept { return { sqrt(a.x), sqrt(a.y) }; }
+	forcedinline const vec2<T> sqrt(const vec2<T>& a) noexcept { return { std::sqrt(a.x), std::sqrt(a.y) }; }
 	template <typename T>
-	forcedinline const vec2<T> sin(const vec2<T>& a) noexcept { return { sin(a.x), sin(a.y) }; }
+	forcedinline const vec2<T> sin(const vec2<T>& a) noexcept { return { std::sin(a.x), std::sin(a.y) }; }
 	template <typename T>
-	forcedinline const vec2<T> cos(const vec2<T>& a) noexcept { return { cos(a.x), cos(a.y) }; }
+	forcedinline const vec2<T> cos(const vec2<T>& a) noexcept { return { std::cos(a.x), std::cos(a.y) }; }
 	template <typename T>
 	forcedinline const vec2<T> approx_sqrt(const vec2<T>& a) noexcept { return { approx_sqrt(a.x), approx_sqrt(a.y) }; }
 
@@ -2143,29 +2144,29 @@ namespace dex
 	forcedinline const vec2<double> step(const vec2<double>& a, const vec2<double>& b) noexcept { return { double(b.x >= a.x), double(b.y >= a.y) }; }
 
 	template <typename T>
-	forcedinline const vec2<T> pow(const vec2<T>& a, const vec2<T>& b) noexcept { return { pow(a.x, b.x), pow(a.y, b.y) }; }
+	forcedinline const vec2<T> pow(const vec2<T>& a, const vec2<T>& b) noexcept { return { std::pow(a.x, b.x), std::pow(a.y, b.y) }; }
 	template <typename T>
-	forcedinline const vec2<T> pow(const vec2<T>& a, T b) noexcept { return { pow(a.x, b), pow(a.y, b) }; }
+	forcedinline const vec2<T> pow(const vec2<T>& a, T b) noexcept { return { std::pow(a.x, b), std::pow(a.y, b) }; }
 
 	template <typename T>
-	forcedinline const vec2<T> trunc(const vec2<T>& a) noexcept { return { trunc(a.x), trunc(a.y) }; }
+	forcedinline const vec2<T> trunc(const vec2<T>& a) noexcept { return { std::trunc(a.x), std::trunc(a.y) }; }
 	template <typename T>
-	forcedinline const vec2<T> floor(const vec2<T>& a) noexcept { return { floor(a.x), floor(a.y) }; }
+	forcedinline const vec2<T> floor(const vec2<T>& a) noexcept { return { std::floor(a.x), std::floor(a.y) }; }
 	template <typename T>
-	forcedinline const vec2<T> ceil(const vec2<T>& a) noexcept { return { ceil(a.x), ceil(a.y) }; }
+	forcedinline const vec2<T> ceil(const vec2<T>& a) noexcept { return { std::ceil(a.x), std::ceil(a.y) }; }
 #endif //GFXMATH_VEC2
 
 #if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
 	template <typename T>
-	forcedinline const vec3<T> abs(const vec3<T>& a) noexcept { return { abs(a.x), abs(a.y), abs(a.z) }; }
+	forcedinline const vec3<T> abs(const vec3<T>& a) noexcept { return { std::abs(a.x), std::abs(a.y), std::abs(a.z) }; }
 	template <typename T>
-	forcedinline const vec3<T> exp(const vec3<T>& a) noexcept { return { exp(a.x), exp(a.y), exp(a.z) }; }
+	forcedinline const vec3<T> exp(const vec3<T>& a) noexcept { return { std::exp(a.x), std::exp(a.y), std::exp(a.z) }; }
 	template <typename T>
-	forcedinline const vec3<T> sqrt(const vec3<T>& a) noexcept { return { sqrt(a.x), sqrt(a.y), sqrt(a.z) }; }
+	forcedinline const vec3<T> sqrt(const vec3<T>& a) noexcept { return { std::sqrt(a.x), std::sqrt(a.y), std::sqrt(a.z) }; }
 	template <typename T>
-	forcedinline const vec3<T> sin(const vec3<T>& a) noexcept { return { sin(a.x), sin(a.y), sin(a.z) }; }
+	forcedinline const vec3<T> sin(const vec3<T>& a) noexcept { return { std::sin(a.x), std::sin(a.y), std::sin(a.z) }; }
 	template <typename T>
-	forcedinline const vec3<T> cos(const vec3<T>& a) noexcept { return { cos(a.x), cos(a.y), cos(a.z) }; }
+	forcedinline const vec3<T> cos(const vec3<T>& a) noexcept { return { std::cos(a.x), std::cos(a.y), std::cos(a.z) }; }
 	template <typename T>
 	forcedinline const vec3<T> approx_sqrt(const vec3<T>& a) noexcept { return { approx_sqrt(a.x), approx_sqrt(a.y), approx_sqrt(a.z) }; }
 
@@ -2184,29 +2185,29 @@ namespace dex
 	forcedinline const vec3<double> step(const vec3<double>& a, const vec3<double>& b) noexcept { return { double(b.x >= a.x), double(b.y >= a.y), double(b.z >= a.z) }; }
 
 	template <typename T>
-	forcedinline const vec3<T> pow(const vec3<T>& a, const vec3<T>& b) noexcept { return { pow(a.x, b.x), pow(a.y, b.y), pow(a.z, b.z) }; }
+	forcedinline const vec3<T> pow(const vec3<T>& a, const vec3<T>& b) noexcept { return { std::pow(a.x, b.x), std::pow(a.y, b.y), std::pow(a.z, b.z) }; }
 	template <typename T>
-	forcedinline const vec3<T> pow(const vec3<T>& a, T b) noexcept { return { pow(a.x, b), pow(a.y, b), pow(a.z, b) }; }
+	forcedinline const vec3<T> pow(const vec3<T>& a, T b) noexcept { return { std::pow(a.x, b), std::pow(a.y, b), std::pow(a.z, b) }; }
 
 	template <typename T>
-	forcedinline const vec3<T> trunc(const vec3<T>& a) noexcept { return { trunc(a.x), trunc(a.y), trunc(a.z) }; }
+	forcedinline const vec3<T> trunc(const vec3<T>& a) noexcept { return { std::trunc(a.x), std::trunc(a.y), std::trunc(a.z) }; }
 	template <typename T>
-	forcedinline const vec3<T> floor(const vec3<T>& a) noexcept { return { floor(a.x), floor(a.y), floor(a.z) }; }
+	forcedinline const vec3<T> floor(const vec3<T>& a) noexcept { return { std::floor(a.x), std::floor(a.y), std::floor(a.z) }; }
 	template <typename T>
-	forcedinline const vec3<T> ceil(const vec3<T>& a) noexcept { return { ceil(a.x), ceil(a.y), ceil(a.z) }; }
+	forcedinline const vec3<T> ceil(const vec3<T>& a) noexcept { return { std::ceil(a.x), std::ceil(a.y), std::ceil(a.z) }; }
 #endif //GFXMATH_VEC3
 
 #if defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
 	template <typename T>
-	forcedinline const vec4<T> abs(const vec4<T>& a) noexcept { return { abs(a.x), abs(a.y), abs(a.z), abs(a.w) }; }
+	forcedinline const vec4<T> abs(const vec4<T>& a) noexcept { return { std::abs(a.x), std::abs(a.y), std::abs(a.z), std::abs(a.w) }; }
 	template <typename T>
-	forcedinline const vec4<T> exp(const vec4<T>& a) noexcept { return { exp(a.x), exp(a.y), exp(a.z), exp(a.w) }; }
+	forcedinline const vec4<T> exp(const vec4<T>& a) noexcept { return { std::exp(a.x), std::exp(a.y), std::exp(a.z), std::exp(a.w) }; }
 	template <typename T>
-	forcedinline const vec4<T> sqrt(const vec4<T>& a) noexcept { return { sqrt(a.x), sqrt(a.y), sqrt(a.z), sqrt(a.w) }; }
+	forcedinline const vec4<T> sqrt(const vec4<T>& a) noexcept { return { std::sqrt(a.x), std::sqrt(a.y), std::sqrt(a.z), std::sqrt(a.w) }; }
 	template <typename T>
-	forcedinline const vec4<T> sin(const vec4<T>& a) noexcept { return { sin(a.x), sin(a.y), sin(a.z), sin(a.w) }; }
+	forcedinline const vec4<T> sin(const vec4<T>& a) noexcept { return { std::sin(a.x), std::sin(a.y), std::sin(a.z), std::sin(a.w) }; }
 	template <typename T>
-	forcedinline const vec4<T> cos(const vec4<T>& a) noexcept { return { cos(a.x), cos(a.y), cos(a.z), cos(a.w) }; }
+	forcedinline const vec4<T> cos(const vec4<T>& a) noexcept { return { std::cos(a.x), std::cos(a.y), std::cos(a.z), std::cos(a.w) }; }
 	template <typename T>
 	forcedinline const vec4<T> approx_sqrt(const vec4<T>& a) noexcept { return { approx_sqrt(a.x), approx_sqrt(a.y), approx_sqrt(a.z), approx_sqrt(a.w) }; }
 
@@ -2225,16 +2226,16 @@ namespace dex
 	forcedinline const vec4<double> step(const vec4<double>& a, const vec4<double>& b) noexcept { return { double(b.x >= a.x), double(b.y >= a.y), double(b.z >= a.z), double(b.w >= a.w) }; }
 
 	template <typename T>
-	forcedinline const vec4<T> pow(const vec4<T>& a, const vec4<T>& b) noexcept { return { pow(a.x, b.x), pow(a.y, b.y), pow(a.z, b.z), pow(a.w, b.w) }; }
+	forcedinline const vec4<T> pow(const vec4<T>& a, const vec4<T>& b) noexcept { return { std::pow(a.x, b.x), std::pow(a.y, b.y), std::pow(a.z, b.z), std::pow(a.w, b.w) }; }
 	template <typename T>
-	forcedinline const vec4<T> pow(const vec4<T>& a, T b) noexcept { return { pow(a.x, b), pow(a.y, b), pow(a.z, b), pow(a.w, b) }; }
+	forcedinline const vec4<T> pow(const vec4<T>& a, T b) noexcept { return { std::pow(a.x, b), std::pow(a.y, b), std::pow(a.z, b), std::pow(a.w, b) }; }
 
 	template <typename T>
-	forcedinline const vec4<T> trunc(const vec4<T>& a) noexcept { return { trunc(a.x), trunc(a.y), trunc(a.z), trunc(a.w) }; }
+	forcedinline const vec4<T> trunc(const vec4<T>& a) noexcept { return { std::trunc(a.x), std::trunc(a.y), std::trunc(a.z), std::trunc(a.w) }; }
 	template <typename T>
-	forcedinline const vec4<T> floor(const vec4<T>& a) noexcept { return { floor(a.x), floor(a.y), floor(a.z), floor(a.w) }; }
+	forcedinline const vec4<T> floor(const vec4<T>& a) noexcept { return { std::floor(a.x), std::floor(a.y), std::floor(a.z), std::floor(a.w) }; }
 	template <typename T>
-	forcedinline const vec4<T> ceil(const vec4<T>& a) noexcept { return { ceil(a.x), ceil(a.y), ceil(a.z), ceil(a.w) }; }
+	forcedinline const vec4<T> ceil(const vec4<T>& a) noexcept { return { std::ceil(a.x), std::ceil(a.y), std::ceil(a.z), std::ceil(a.w) }; }
 #endif //GFXMATH_VEC4
 
 #if defined(GFXMATH_ARGB) || defined(GFXMATH_ALL)
@@ -3462,11 +3463,11 @@ namespace dex
 			return pow(cl, b);
 		// return select(cl <= 0.0031308f, 12.92f * cl, 1.055f * pow(cl, 1.0f / 2.4f) - 0.055f);
 		else if constexpr (std::is_base_of_v<vec4<float>, T>)
-			return T(pow(cl.r, b), pow(cl.g, b), pow(cl.b, b), cl.a);
+			return T(std::pow(cl.r, b), std::pow(cl.g, b), std::pow(cl.b, b), cl.a);
 		else if constexpr (std::is_base_of_v<vec3<float>, T>)
-			return T(pow(cl.r, b), pow(cl.g, b), pow(cl.b, b));
+			return T(std::pow(cl.r, b), std::pow(cl.g, b), std::pow(cl.b, b));
 		else if constexpr (std::is_base_of_v<vec2<float>, T>)
-			return T(pow(cl.x, b), pow(cl.y, b));
+			return T(std::pow(cl.x, b), std::pow(cl.y, b));
 		else
 		{
 			static_assert(always_false<T>, "Bad Type");
@@ -3481,13 +3482,13 @@ namespace dex
 		if constexpr (std::is_floating_point_v<T>)
 			// return cl * cl;
 			return pow(cl, b);
-		// return select(cl <= 0.04045f, cl * 1.0f / 12.92f, pow((cl + 0.055f) * 1.0f / 1.055f, 2.4f));
+		// return select(cl <= 0.04045f, cl * 1.0f / 12.92f, std::pow((cl + 0.055f) * 1.0f / 1.055f, 2.4f));
 		else if constexpr (std::is_base_of_v<vec4<float>, T>)
-			return T(pow(cl.r, b), pow(cl.g, b), pow(cl.b, b), cl.a);
+			return T(std::pow(cl.r, b), std::pow(cl.g, b), std::pow(cl.b, b), cl.a);
 		else if constexpr (std::is_base_of_v<vec3<float>, T>)
-			return T(pow(cl.r, b), pow(cl.g, b), pow(cl.b, b));
+			return T(std::pow(cl.r, b), std::pow(cl.g, b), std::pow(cl.b, b));
 		else if constexpr (std::is_base_of_v<vec2<float>, T>)
-			return T(pow(cl.x, b), pow(cl.y, b));
+			return T(std::pow(cl.x, b), std::pow(cl.y, b));
 		else
 		{
 			static_assert(always_false<T>, "Bad Type");
