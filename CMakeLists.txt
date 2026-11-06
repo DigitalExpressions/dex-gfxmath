@@ -9,8 +9,7 @@ option(GFXMATH_FETCH_VECTORCLASS "Fetch the pinned Vector Class Library when no 
 
 if(NOT GFXMATH_VECTORCLASS_DIR)
     find_path(GFXMATH_VECTORCLASS_INCLUDE_DIR vectorclass.h
-        HINTS "${CMAKE_CURRENT_SOURCE_DIR}/../vectorclass"
-              "${CMAKE_CURRENT_SOURCE_DIR}/../Expressionist/build/_deps/vectorclass-src")
+        HINTS "${CMAKE_CURRENT_SOURCE_DIR}/../vectorclass")
 
     if(GFXMATH_VECTORCLASS_INCLUDE_DIR)
         set(GFXMATH_VECTORCLASS_DIR "${GFXMATH_VECTORCLASS_INCLUDE_DIR}")

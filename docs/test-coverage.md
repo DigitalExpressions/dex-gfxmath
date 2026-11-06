@@ -1,8 +1,8 @@
 # GfxMath test coverage
 
 The standalone C++20 suite tests `Source/GfxMath.h` directly. It needs the C++
-standard library and Vector Class Library (VCL), with no JUCE or Expressionist
-linkage. `CMakeLists.txt` pins the optional VCL fetch; a local VCL directory can
+standard library and Vector Class Library (VCL).
+`CMakeLists.txt` pins the optional VCL fetch; a local VCL directory can
 be supplied for offline builds. See [the build instructions](../README.md#standalone-tests).
 
 The main test executable enables `GFXMATH_ALL`. Separate translation units compile

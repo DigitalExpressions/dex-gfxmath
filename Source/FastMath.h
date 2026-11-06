@@ -37,6 +37,16 @@
  * 
  */
 
+/// @file FastMath.h
+/// @brief Experimental scalar and four-lane x86 approximations for geometry and math.
+/// @details FT provides trigonometry, lengths, roots, exponentials, logarithms, and powers;
+/// FTA provides higher-accuracy trigonometry and hardware square roots.
+/// All angles are radians; each __m128 lane is an independent float calculation.
+/// Requires x86 intrinsics; FT::sincos_ps additionally uses SSE4.1. There is no CPU dispatch.
+/// Bit-based helpers assume IEEE-754 binary32/binary64, 32-bit int, 64-bit long long,
+/// and little-endian word order for split-word doubles. They are not full <cmath> substitutes.
+/// @note Historical benchmark/accuracy comments below are not current guarantees.
+/// @see docs/fastmath-api.md for API contracts and docs/fastmath-test-coverage.md for tested errors.
 #pragma once
 #include <immintrin.h>
 #include <cmath>
@@ -91,35 +101,133 @@
 ///////////////////////////////////
 
 //SCALAR
+/// @brief Fast scalar and four-lane geometry/trigonometry plus scalar exp/log/pow approximations.
+/// @details Use finite, bounded inputs and the function-specific domains below.
+/// Names such as precise, better, lb, and ub identify strategies, not universal accuracy or bound proofs.
+/// @see FTA for higher-accuracy trigonometric kernels.
 namespace FT
 {
+    /// @brief Approximate reciprocal full turn, 1 / (2*pi), used for phase reduction.
     const float invtwopi = 0.1591549f;
+    /// @brief Approximate full turn in radians, 2*pi.
     const float twopi = 6.283185f;
+    /// @brief Approximate three-quarter turn in radians, 3*pi/2.
     const float threehalfpi = 4.7123889f;
+    /// @brief Approximate half turn in radians, pi.
     const float pi = 3.141593f;
+    /// @brief Approximate quarter turn in radians, pi/2.
     const float halfpi = 1.570796f;
+    /// @brief Approximate eighth turn in radians, pi/4.
     const float quarterpi = 0.7853982f;
+    /// @brief Four sign-bit masks (0x80000000); a bit pattern, not four numeric ones.
     static const __m128 SIGNMASK = _mm_castsi128_ps(_mm_set1_epi32(0x80000000));
 
+    /// @brief Approximate arctangent with the lower-degree polynomial.
+    /// @param x Finite ratio in [-1, 1]; no reciprocal range reduction is performed.
+    /// @return Approximate arctangent in radians.
     static forcedinline float atan(float x);
+    /// @brief Evaluate the degree-four reduced cosine polynomial.
+    /// @param x Finite reduced angle with abs(x) <= pi/2, in radians.
+    /// @return Approximate cosine without periodic or quadrant range reduction.
     static forcedinline float cos_32s(float x);
+    /// @brief Approximate four independent arctangents with the lower-degree polynomial.
+    /// @param x Four finite ratios, each in [-1, 1]; no reciprocal range reduction is performed.
+    /// @return Four approximate arctangents in radians.
     static forcedinline __m128 atan_ps(__m128 x);
+    /// @brief Evaluate the degree-four reduced cosine polynomial in four independent lanes.
+    /// @param x Four finite reduced angles, each with abs(x) <= pi/2, in radians.
+    /// @return Approximate per-lane cosines without periodic or quadrant range reduction.
     static forcedinline __m128 cos_32s_ps(__m128 x);
 
+    /// @brief Approximate a positive square root using x * rsqrt(x), without refinement.
+    /// @param squared Positive, finite normal value for the useful approximation domain.
+    /// @return Approximate square root; nonpositive inputs and NaN return positive zero.
+    /// @note Positive infinity produces NaN. Subnormal accuracy is not guaranteed.
+    /// The packed sqrt_ps overload uses hardware square root instead.
     static forcedinline float sqrt(float squared);
+    /// @brief Compute a 2D Euclidean length using FT::sqrt.
+    /// @param x X coordinate.
+    /// @param y Y coordinate.
+    /// @return Square root of the sum of squared coordinates.
+    /// @pre Squaring and addition must stay within the root function's useful representable domain.
+    /// @note Direct sums of squares do not provide the overflow scaling of std::hypot.
     static forcedinline float length(float x, float y);
+    /// @brief Compute a 3D Euclidean length using FT::sqrt.
+    /// @param x X coordinate.
+    /// @param y Y coordinate.
+    /// @param z Z coordinate.
+    /// @return Square root of the sum of squared coordinates.
+    /// @pre Squaring and addition must stay within the root function's useful representable domain.
+    /// @note Direct sums of squares do not provide the overflow scaling of std::hypot.
     static forcedinline float length(float x, float y, float z);
+    /// @brief Approximate the quadrant-aware angle of (x, y), in radians.
+    /// @param y Finite vertical coordinate; argument order matches std::atan2(y, x).
+    /// @param x Finite horizontal coordinate.
+    /// @return Approximate signed angle in radians with finite signed-zero axis/origin conventions.
+    /// @pre Both coordinates are finite; infinity/NaN behavior is not a std::atan2 contract.
     static forcedinline float atan2(float y, float x);
+    /// @brief Approximate cosine after float phase reduction and quadrant folding.
+    /// @param angle Finite moderate angle in radians.
+    /// @return Approximate cosine of angle.
+    /// @note Large phases lose float reduction precision; reduce accumulated phase externally when needed.
     static forcedinline float cos(float angle);
+    /// @brief Approximate sine through a phase-shifted cosine.
+    /// @param angle Finite moderate angle in radians.
+    /// @return Approximate sine of angle.
+    /// @note Large phases lose float reduction precision; reduce accumulated phase externally when needed.
     static forcedinline float sin(float angle);
+    /// @brief Approximate sine and cosine together with cosine-based sine reconstruction.
+    /// @param angle Finite moderate angle in radians.
+    /// @return Pair {sine, cosine}; .first is sine and .second is cosine.
+    /// @note Signed sqrt(1 - cosine*cosine) amplifies sine error near multiples of pi.
+    /// Use separate sin/cos calls when their near-zero accuracy is required.
     static forcedinline std::pair<float, float> sincos(float angle);
 
+    /// @brief Compute four independent hardware float square roots.
+    /// @param squared Four inputs; nonnegative finite lanes have the useful real-valued domain.
+    /// @return Per-lane square roots, preserving signed zero and propagating NaN/infinity.
+    /// @note Negative finite lanes produce NaN. This differs from the reciprocal-root algorithm of scalar FT::sqrt.
     static forcedinline __m128 sqrt_ps(__m128 squared);
+    /// @brief Compute four independent 2D Euclidean lengths.
+    /// @param x Four X coordinates, one per lane.
+    /// @param y Four Y coordinates, one per lane.
+    /// @return Four square roots of corresponding coordinate sums of squares.
+    /// @pre Squaring and addition must stay within the root function's useful representable domain.
+    /// @note Direct sums of squares do not provide the overflow scaling of std::hypot.
     static forcedinline __m128 length_ps(__m128 x, __m128 y);
+    /// @brief Compute four independent 3D Euclidean lengths.
+    /// @param x Four X coordinates, one per lane.
+    /// @param y Four Y coordinates, one per lane.
+    /// @param z Four Z coordinates, one per lane.
+    /// @return Four square roots of corresponding coordinate sums of squares.
+    /// @pre Squaring and addition must stay within the root function's useful representable domain.
+    /// @note Direct sums of squares do not provide the overflow scaling of std::hypot.
     static forcedinline __m128 length_ps(__m128 x, __m128 y, __m128 z);
+    /// @brief Approximate four quadrant-aware angles of corresponding (x, y) coordinates.
+    /// @param y Four finite vertical coordinates; y is the first argument.
+    /// @param x Four finite horizontal coordinates.
+    /// @return Four signed angles in radians with finite signed-zero axis/origin conventions.
+    /// @pre Both coordinates in every lane are finite; infinity/NaN behavior is not a std::atan2 contract.
     static forcedinline __m128 atan2_ps(__m128 y, __m128 x);
+    /// @brief Approximate cosine in four independent float lanes.
+    /// @param angle Four finite moderate angles in radians.
+    /// @return Four corresponding approximate cosine values.
+    /// @pre Phase-reduction quotients must fit the packed reducer's 32-bit conversion.
+    /// @note Large phases lose float reduction precision; reduce accumulated phase externally when needed.
     static forcedinline __m128 cos_ps(__m128 angle);
+    /// @brief Approximate sine in four independent float lanes.
+    /// @param angle Four finite moderate angles in radians.
+    /// @return Four corresponding approximate sine values.
+    /// @pre Phase-reduction quotients must fit the packed reducer's 32-bit conversion.
+    /// @note Large phases lose float reduction precision; reduce accumulated phase externally when needed.
     static forcedinline __m128 sin_ps(__m128 angle);
+    /// @brief Approximate four sine/cosine pairs with cosine-based sine reconstruction.
+    /// @param angle Four finite moderate angles in radians.
+    /// @return Pair of registers: .first contains four sines, .second four cosines.
+    /// @pre Float phase reduction and any quotient-to-int conversion must remain in range.
+    /// @note Signed sqrt(1 - cosine*cosine) amplifies sine error near multiples of pi.
+    /// Use separate sin_ps/cos_ps calls when their near-zero accuracy is required.
+    /// This implementation requires SSE4.1 for its packed floor instruction.
     static forcedinline std::pair<__m128, __m128> sincos_ps(__m128 angle);
 
     /*
@@ -182,6 +290,11 @@ namespace FT
      As a lower bound this is suitable for use when generating Mass and Precision estimates.
      */
 
+    /// @brief Approximate exp(a) using full-bit lower-oriented correction.
+    /// @param a Finite natural exponent; sampled domain [-16, 16].
+    /// @return Approximation to e raised to a.
+    /// @pre Integer conversion and constructed floating representations must remain in positive normal ranges.
+    /// @note The bound-oriented name is not a universal conservative certificate.
     static forcedinline double exp_fast_lb(double a) {
         union { double d; long long x; } u;
         u.x = (long long)(6497320848556798LL * a + 4606794787981043020);
@@ -189,18 +302,32 @@ namespace FT
     }
 
     /* 4607182418800017408 + 1 */
+    /// @brief Approximate exp(a) using full-bit upper-oriented correction.
+    /// @param a Finite natural exponent; sampled domain [-16, 16].
+    /// @return Approximation to e raised to a.
+    /// @pre Integer conversion and constructed floating representations must remain in positive normal ranges.
+    /// @note The bound-oriented name is not a universal conservative certificate.
     static forcedinline double exp_fast_ub(double a) {
         union { double d; long long x; } u;
         u.x = (long long)(6497320848556798LL * a + 4607182418800017409);
         return u.d;
     }
 
+    /// @brief Approximate exp(a) using full-bit central correction.
+    /// @param a Finite natural exponent; sampled domain [-16, 16].
+    /// @return Approximation to e raised to a.
+    /// @pre Integer conversion and constructed floating representations must remain in positive normal ranges.
     static forcedinline double exp_fast(double a) {
         union { double d; long long x; } u;
         u.x = (long long)(6497320848556798LL * a + 0x3fef127e83d16f12LL);
         return u.d;
     }
 
+    /// @brief Approximate exp(a) using ratio of two approximate half-exponent values.
+    /// @param a Finite natural exponent; sampled domain [-16, 16].
+    /// @return Approximation to e raised to a.
+    /// @pre Integer conversion and constructed floating representations must remain in positive normal ranges.
+    /// Both approximate operands and their quotient must remain finite and meaningful.
     static forcedinline double better_exp_fast(double a) {
         union { double d; long long x; } u, v;
         u.x = (long long)(3248660424278399LL * a + 0x3fdf127e83d16f12LL);
@@ -209,6 +336,10 @@ namespace FT
     }
 
     /* Schraudolph's published algorithm */
+    /// @brief Approximate exp(a) using coarse high-word binary64 construction.
+    /// @param a Finite natural exponent; sampled domain [-16, 16].
+    /// @return Approximation to e raised to a.
+    /// @pre Integer conversion and constructed floating representations must remain in positive normal ranges.
     static forcedinline double exp_fast_schraudolph(double a) {
         union { double d; int x[2]; } u;
         u.x[1] = (int)(1512775 * a + 1072632447);
@@ -217,6 +348,11 @@ namespace FT
     }
 
     /* 1065353216 + 1 */
+    /// @brief Approximate exp(a) using binary32 upper-oriented correction.
+    /// @param a Finite natural exponent; sampled domain [-8, 8].
+    /// @return Approximation to e raised to a.
+    /// @pre Integer conversion and constructed floating representations must remain in positive normal ranges.
+    /// @note The bound-oriented name is not a universal conservative certificate.
     static forcedinline float expf_fast_ub(float a) {
         union { float f; int x; } u;
         u.x = (int)(12102203 * a + 1065353217);
@@ -225,6 +361,10 @@ namespace FT
 
     /* Schraudolph's published algorithm with John's constants */
     /* 1065353216 - 486411 = 1064866805 */
+    /// @brief Approximate exp(a) using binary32 central correction.
+    /// @param a Finite natural exponent; sampled domain [-8, 8].
+    /// @return Approximation to e raised to a.
+    /// @pre Integer conversion and constructed floating representations must remain in positive normal ranges.
     static forcedinline float expf_fast(float a) {
         union { float f; int x; } u;
         u.x = (int)(12102203 * a + 1064866805);
@@ -232,6 +372,11 @@ namespace FT
     }
 
     //  1056478197 
+    /// @brief Approximate exp(a) using ratio of float half-exponent approximations.
+    /// @param a Finite natural exponent; sampled domain [-8, 8].
+    /// @return Approximation to e raised to a as double, after float arithmetic and division.
+    /// @pre Integer conversion and constructed floating representations must remain in positive normal ranges.
+    /// Both approximate operands and their quotient must remain finite and meaningful.
     static forcedinline double better_expf_fast(float a) {
         union { float f; int x; } u, v;
         u.x = (long long)(6051102 * a + 1056478197);
@@ -240,6 +385,11 @@ namespace FT
     }
 
     /* 1065353216 - 722019 */
+    /// @brief Approximate exp(a) using binary32 lower-oriented correction.
+    /// @param a Finite natural exponent; sampled domain [-8, 8].
+    /// @return Approximation to e raised to a.
+    /// @pre Integer conversion and constructed floating representations must remain in positive normal ranges.
+    /// @note The bound-oriented name is not a universal conservative certificate.
     static forcedinline float expf_fast_lb(float a) {
         union { float f; int x; } u;
         u.x = (int)(12102203 * a + 1064631197);
@@ -247,22 +397,40 @@ namespace FT
     }
 
     /* Ankerl's inversion of Schraudolph's published algorithm, converted to explicit multiplication */
+    /// @brief Approximate the natural logarithm using high-word binary64 affine inverse.
+    /// @param a Positive, finite, normal input value.
+    /// @return Approximate ln(a); assess error near a == 1 as absolute error.
+    /// @note This does not implement std::log handling of zero, negatives, NaN, or infinity.
     static forcedinline double log_fast_ankerl(double a) {
         union { double d; int x[2]; } u = { a };
         return (u.x[1] - 1072632447) * 6.610368362777016e-7; /* 1 / 1512775.0; */
     }
 
+    /// @brief Approximate the natural logarithm using full-bit upper-oriented correction.
+    /// @param a Positive, finite, normal input value.
+    /// @return Approximate ln(a); assess error near a == 1 as absolute error.
+    /// @note This does not implement std::log handling of zero, negatives, NaN, or infinity.
+    /// The bound-oriented name is not an interval-arithmetic certificate.
     static forcedinline double log_fast_ub(double a) {
         union { double d; long long x; } u = { a };
         return (u.x - 4606794787981043020) * 1.539095918623324e-16; /* 1 / 6497320848556798.0; */
     }
 
     /* Ankerl's inversion of Schraudolph's published algorithm with my constants */
+    /// @brief Approximate the natural logarithm using full-bit central correction.
+    /// @param a Positive, finite, normal input value.
+    /// @return Approximate ln(a); assess error near a == 1 as absolute error.
+    /// @note This does not implement std::log handling of zero, negatives, NaN, or infinity.
     static forcedinline double log_fast(double a) {
         union { double d; long long x; } u = { a };
         return (u.x - 4606921278410026770) * 1.539095918623324e-16; /* 1 / 6497320848556798.0; */
     }
 
+    /// @brief Approximate the natural logarithm using full-bit lower-oriented correction.
+    /// @param a Positive, finite, normal input value.
+    /// @return Approximate ln(a); assess error near a == 1 as absolute error.
+    /// @note This does not implement std::log handling of zero, negatives, NaN, or infinity.
+    /// The bound-oriented name is not an interval-arithmetic certificate.
     static forcedinline double log_fast_lb(double a) {
         union { double d; long long x; } u = { a };
         return (u.x - 4607182418800017409) * 1.539095918623324e-16; /* 1 / 6497320848556798.0; */
@@ -270,6 +438,11 @@ namespace FT
 
 
     /* 1065353216 - 722019 */
+    /// @brief Approximate the natural logarithm using binary32 upper-oriented correction.
+    /// @param a Positive, finite, normal input value.
+    /// @return Approximate ln(a); assess error near a == 1 as absolute error.
+    /// @note This does not implement std::log handling of zero, negatives, NaN, or infinity.
+    /// The bound-oriented name is not an interval-arithmetic certificate.
     static forcedinline float logf_fast_ub(float a) {
         union { float f; int x; } u = { a };
         return (u.x - 1064631197) * 8.262958405176314e-8f; /* 1 / 12102203.0; */
@@ -277,18 +450,32 @@ namespace FT
 
     /* Ankerl's adaptation of Schraudolph's published algorithm with John's constants */
     /* 1065353216 - 486411 = 1064866805 */
+    /// @brief Approximate the natural logarithm using binary32 central correction.
+    /// @param a Positive, finite, normal input value.
+    /// @return Approximate ln(a); assess error near a == 1 as absolute error.
+    /// @note This does not implement std::log handling of zero, negatives, NaN, or infinity.
     static forcedinline float logf_fast(float a) {
         union { float f; int x; } u = { a };
         return (u.x - 1064866805) * 8.262958405176314e-8f; /* 1 / 12102203.0; */
     }
 
     /* 1065353216 + 1 */
+    /// @brief Approximate the natural logarithm using binary32 lower-oriented correction.
+    /// @param a Positive, finite, normal input value.
+    /// @return Approximate ln(a); assess error near a == 1 as absolute error.
+    /// @note This does not implement std::log handling of zero, negatives, NaN, or infinity.
+    /// The bound-oriented name is not an interval-arithmetic certificate.
     static forcedinline float logf_fast_lb(float a) {
         union { float f; int x; } u = { a };
         return (u.x - 1065353217) * 8.262958405176314e-8f; /* 1 / 12102203.0 */
     }
 
     /* Ankerl's version of Schraudolph's approximation. */
+    /// @brief Approximate pow(a, b) using high-word binary64 bit-space approximation.
+    /// @param a Positive, finite, normal base.
+    /// @param b Finite exponent.
+    /// @return Approximate a raised to b, with the base as the first argument.
+    /// @pre Encoded representations, intermediate products, and any reciprocal must remain finite and in range.
     static forcedinline double pow_fast_ankerl(double a, double b) {
         union { double d; int x[2]; } u = { a };
         u.x[1] = (int)(b * (u.x[1] - 1072632447) + 1072632447);
@@ -305,18 +492,35 @@ namespace FT
     /* 1065353216 + 1      = 1065353217 ub */
     /* 1065353216 - 486411 = 1064866805 min RMSE */
     /* 1065353216 - 722019 = 1064631197 lb */
+    /// @brief Approximate pow(a, b) using central binary32 bit-space approximation.
+    /// @param a Positive, finite, normal base.
+    /// @param b Finite exponent.
+    /// @return Approximate a raised to b, with the base as the first argument.
+    /// @pre Encoded representations, intermediate products, and any reciprocal must remain finite and in range.
     static forcedinline float powf_fast(float a, float b) {
         union { float d; int x; } u = { a };
         u.x = (int)(b * (u.x - 1064866805) + 1064866805);
         return u.d;
     }
 
+    /// @brief Approximate pow(a, b) using lower-oriented binary32 bit-space approximation.
+    /// @param a Positive, finite, normal base.
+    /// @param b Finite exponent.
+    /// @return Approximate a raised to b, with the base as the first argument.
+    /// @pre Encoded representations, intermediate products, and any reciprocal must remain finite and in range.
+    /// @note Lower/upper naming does not promise bounds for negative exponents or all rounding cases.
     static forcedinline float powf_fast_lb(float a, float b) {
         union { float d; int x; } u = { a };
         u.x = (int)(b * (u.x - 1065353217) + 1064631197);
         return u.d;
     }
 
+    /// @brief Approximate pow(a, b) using upper-oriented binary32 bit-space approximation.
+    /// @param a Positive, finite, normal base.
+    /// @param b Finite exponent.
+    /// @return Approximate a raised to b, with the base as the first argument.
+    /// @pre Encoded representations, intermediate products, and any reciprocal must remain finite and in range.
+    /// @note Lower/upper naming does not promise bounds for negative exponents or all rounding cases.
     static forcedinline float powf_fast_ub(float a, float b) {
         union { float d; int x; } u = { a };
         u.x = (int)(b * (u.x - 1064631197) + 1065353217);
@@ -336,18 +540,35 @@ namespace FT
 
     */
 
+    /// @brief Approximate pow(a, b) using upper-oriented full-bit binary64 approximation.
+    /// @param a Positive, finite, normal base.
+    /// @param b Finite exponent.
+    /// @return Approximate a raised to b, with the base as the first argument.
+    /// @pre Encoded representations, intermediate products, and any reciprocal must remain finite and in range.
+    /// @note Lower/upper naming does not promise bounds for negative exponents or all rounding cases.
     static forcedinline double pow_fast_ub(double a, double b) {
         union { double d; long long x; } u = { a };
         u.x = (long long)(b * (u.x - 4606794787981043020LL) + 4607182418800017409LL);
         return u.d;
     }
 
+    /// @brief Approximate pow(a, b) using central full-bit binary64 approximation.
+    /// @param a Positive, finite, normal base.
+    /// @param b Finite exponent.
+    /// @return Approximate a raised to b, with the base as the first argument.
+    /// @pre Encoded representations, intermediate products, and any reciprocal must remain finite and in range.
     static forcedinline double pow_fast(double a, double b) {
         union { double d; long long x; } u = { a };
         u.x = (long long)(b * (u.x - 4606921278410026770LL) + 4606921278410026770LL);
         return u.d;
     }
 
+    /// @brief Approximate pow(a, b) using lower-oriented full-bit binary64 approximation.
+    /// @param a Positive, finite, normal base.
+    /// @param b Finite exponent.
+    /// @return Approximate a raised to b, with the base as the first argument.
+    /// @pre Encoded representations, intermediate products, and any reciprocal must remain finite and in range.
+    /// @note Lower/upper naming does not promise bounds for negative exponents or all rounding cases.
     static forcedinline double pow_fast_lb(double a, double b) {
         union { double d; long long x; } u = { a };
         u.x = (long long)(b * (u.x - 4607182418800017409LL) + 4606794787981043020LL);
@@ -355,6 +576,12 @@ namespace FT
     }
 
     /* should be much more precise with large b, still ~3.3x faster. */
+    /// @brief Approximate pow(a, b) using integer squaring plus a high-word fractional power.
+    /// @param a Positive, finite, normal base.
+    /// @param b Finite exponent; its absolute integer part must fit int.
+    /// @return Approximate a raised to b, with the base as the first argument.
+    /// @pre Encoded representations, intermediate products, and any reciprocal must remain finite and in range.
+    /// @note Integral exponents use a unit fractional factor; negative exponents invert the magnitude result.
     static forcedinline double pow_fast_precise_ankerl(double a, double b)
     {
         int flipped = 0;
@@ -390,6 +617,12 @@ namespace FT
     }
 
     /* should be much more precise with large b, still ~3.3x faster. */
+    /// @brief Approximate pow(a, b) using integer squaring plus a base-dependent full-bit fractional power.
+    /// @param a Positive, finite, normal base.
+    /// @param b Finite exponent; its absolute integer part must fit int.
+    /// @return Approximate a raised to b, with the base as the first argument.
+    /// @pre Encoded representations, intermediate products, and any reciprocal must remain finite and in range.
+    /// @note Integral exponents use a unit fractional factor; negative exponents invert the magnitude result.
     static forcedinline double pow_fast_precise(double a, double b)
     {
         int flipped = 0;
@@ -419,6 +652,12 @@ namespace FT
         return flipped ? 1.0 / r : r;
     }
 
+    /// @brief Approximate pow(a, b) using integer squaring plus better_exp_fast(fraction * log_fast(base)).
+    /// @param a Positive, finite, normal base.
+    /// @param b Finite exponent; its absolute integer part must fit int.
+    /// @return Approximate a raised to b, with the base as the first argument.
+    /// @pre Encoded representations, intermediate products, and any reciprocal must remain finite and in range.
+    /// @note Integral exponents use a unit fractional factor; negative exponents invert the magnitude result.
     static forcedinline double better_pow_fast_precise(double a, double b)
     {
         int flipped = 0;
@@ -449,6 +688,12 @@ namespace FT
     }
 
     /* should be much more precise with large b */
+    /// @brief Approximate pow(a, b) using integer squaring plus a binary32 fractional power.
+    /// @param a Positive, finite, normal base.
+    /// @param b Finite exponent; its absolute integer part must fit int.
+    /// @return Approximate a raised to b, with the base as the first argument.
+    /// @pre Encoded representations, intermediate products, and any reciprocal must remain finite and in range.
+    /// @note Integral exponents use a unit fractional factor; negative exponents invert the magnitude result.
     static forcedinline float powf_fast_precise(float a, float b)
     {
         int flipped = 0;
@@ -483,6 +728,12 @@ namespace FT
     }
 
     /* should be much more precise with large b */
+    /// @brief Approximate pow(a, b) using integer squaring plus a float log/exponential fractional power.
+    /// @param a Positive, finite, normal base.
+    /// @param b Finite exponent; its absolute integer part must fit int.
+    /// @return Approximate a raised to b, with the base as the first argument.
+    /// @pre Encoded representations, intermediate products, and any reciprocal must remain finite and in range.
+    /// @note Integral exponents use a unit fractional factor; negative exponents invert the magnitude result.
     static forcedinline float better_powf_fast_precise(float a, float b)
     {
         int flipped = 0;
@@ -731,27 +982,116 @@ static forcedinline std::pair<__m128, __m128> FT::sincos_ps(__m128 angle)
 /////////////////////////////////
 
 //SCALAR
+/// @brief Higher-accuracy scalar and four-lane trigonometry with hardware square roots.
+/// @details Trigonometric functions use radians. Packed functions evaluate corresponding lanes independently.
+/// Approximation and phase-reduction limits still apply; exponential/logarithm/power helpers are in FT.
+/// @see FT
 namespace FTA
 {
+    /// @brief Approximate arctangent with the higher-accuracy rational kernel.
+    /// @param x Finite ratio in [-1, 1]; no reciprocal range reduction is performed.
+    /// @return Approximate arctangent in radians.
     static forcedinline float atan(float x);
+    /// @brief Evaluate the degree-six reduced cosine polynomial.
+    /// @param x Finite reduced angle with abs(x) <= pi/2, in radians.
+    /// @return Approximate cosine without periodic or quadrant range reduction.
     static forcedinline float cos_52s(float x);
+    /// @brief Approximate four independent arctangents with the higher-accuracy rational kernel.
+    /// @param x Four finite ratios, each in [-1, 1]; no reciprocal range reduction is performed.
+    /// @return Four approximate arctangents in radians.
     static forcedinline __m128 atan_ps(__m128 x);
+    /// @brief Evaluate the degree-six reduced cosine polynomial in four independent lanes.
+    /// @param x Four finite reduced angles, each with abs(x) <= pi/2, in radians.
+    /// @return Approximate per-lane cosines without periodic or quadrant range reduction.
     static forcedinline __m128 cos_52s_ps(__m128 x);
 
+    /// @brief Compute a scalar float square root with the hardware square-root instruction.
+    /// @param squared Input value; nonnegative finite inputs have the useful real-valued domain.
+    /// @return Square root, preserving signed zero; negative values produce NaN.
+    /// @note Unlike FT::sqrt, this hardware form propagates NaN and positive infinity.
     static forcedinline float sqrt(float squared);
+    /// @brief Compute a 2D Euclidean length using FTA::sqrt.
+    /// @param x X coordinate.
+    /// @param y Y coordinate.
+    /// @return Square root of the sum of squared coordinates.
+    /// @pre Squaring and addition must stay within the root function's useful representable domain.
+    /// @note Direct sums of squares do not provide the overflow scaling of std::hypot.
     static forcedinline float length(float x, float y);
+    /// @brief Compute a 3D Euclidean length using FTA::sqrt.
+    /// @param x X coordinate.
+    /// @param y Y coordinate.
+    /// @param z Z coordinate.
+    /// @return Square root of the sum of squared coordinates.
+    /// @pre Squaring and addition must stay within the root function's useful representable domain.
+    /// @note Direct sums of squares do not provide the overflow scaling of std::hypot.
     static forcedinline float length(float x, float y, float z);
+    /// @brief Approximate the quadrant-aware angle of (x, y), in radians.
+    /// @param y Finite vertical coordinate; argument order matches std::atan2(y, x).
+    /// @param x Finite horizontal coordinate.
+    /// @return Approximate signed angle in radians with finite signed-zero axis/origin conventions.
+    /// @pre Both coordinates are finite; infinity/NaN behavior is not a std::atan2 contract.
     static forcedinline float atan2(float y, float x);
+    /// @brief Approximate cosine after float phase reduction and quadrant folding.
+    /// @param angle Finite moderate angle in radians.
+    /// @return Approximate cosine of angle.
+    /// @note Large phases lose float reduction precision; reduce accumulated phase externally when needed.
     static forcedinline float cos(float angle);
+    /// @brief Approximate sine through a phase-shifted cosine.
+    /// @param angle Finite moderate angle in radians.
+    /// @return Approximate sine of angle.
+    /// @note Large phases lose float reduction precision; reduce accumulated phase externally when needed.
     static forcedinline float sin(float angle);
+    /// @brief Approximate sine and cosine together with cosine-based sine reconstruction.
+    /// @param angle Finite moderate angle in radians.
+    /// @return Pair {sine, cosine}; .first is sine and .second is cosine.
+    /// @note Signed sqrt(1 - cosine*cosine) amplifies sine error near multiples of pi.
+    /// Use separate sin/cos calls when their near-zero accuracy is required.
     static forcedinline std::pair<float, float> sincos(float angle);
 
+    /// @brief Compute four independent hardware float square roots.
+    /// @param squared Four inputs; nonnegative finite lanes have the useful real-valued domain.
+    /// @return Per-lane square roots, preserving signed zero and propagating NaN/infinity.
+    /// @note Negative finite lanes produce NaN. No cross-lane reduction occurs.
     static forcedinline __m128 sqrt_ps(__m128 squared);
+    /// @brief Compute four independent 2D Euclidean lengths.
+    /// @param x Four X coordinates, one per lane.
+    /// @param y Four Y coordinates, one per lane.
+    /// @return Four square roots of corresponding coordinate sums of squares.
+    /// @pre Squaring and addition must stay within the root function's useful representable domain.
+    /// @note Direct sums of squares do not provide the overflow scaling of std::hypot.
     static forcedinline __m128 length_ps(__m128 x, __m128 y);
+    /// @brief Compute four independent 3D Euclidean lengths.
+    /// @param x Four X coordinates, one per lane.
+    /// @param y Four Y coordinates, one per lane.
+    /// @param z Four Z coordinates, one per lane.
+    /// @return Four square roots of corresponding coordinate sums of squares.
+    /// @pre Squaring and addition must stay within the root function's useful representable domain.
+    /// @note Direct sums of squares do not provide the overflow scaling of std::hypot.
     static forcedinline __m128 length_ps(__m128 x, __m128 y, __m128 z);
+    /// @brief Approximate four quadrant-aware angles of corresponding (x, y) coordinates.
+    /// @param y Four finite vertical coordinates; y is the first argument.
+    /// @param x Four finite horizontal coordinates.
+    /// @return Four signed angles in radians with finite signed-zero axis/origin conventions.
+    /// @pre Both coordinates in every lane are finite; infinity/NaN behavior is not a std::atan2 contract.
     static forcedinline __m128 atan2_ps(__m128 y, __m128 x);
+    /// @brief Approximate cosine in four independent float lanes.
+    /// @param angle Four finite moderate angles in radians.
+    /// @return Four corresponding approximate cosine values.
+    /// @pre Phase-reduction quotients must fit the packed reducer's 32-bit conversion.
+    /// @note Large phases lose float reduction precision; reduce accumulated phase externally when needed.
     static forcedinline __m128 cos_ps(__m128 angle);
+    /// @brief Approximate sine in four independent float lanes.
+    /// @param angle Four finite moderate angles in radians.
+    /// @return Four corresponding approximate sine values.
+    /// @pre Phase-reduction quotients must fit the packed reducer's 32-bit conversion.
+    /// @note Large phases lose float reduction precision; reduce accumulated phase externally when needed.
     static forcedinline __m128 sin_ps(__m128 angle);
+    /// @brief Approximate four sine/cosine pairs with cosine-based sine reconstruction.
+    /// @param angle Four finite moderate angles in radians.
+    /// @return Pair of registers: .first contains four sines, .second four cosines.
+    /// @pre Float phase reduction and any quotient-to-int conversion must remain in range.
+    /// @note Signed sqrt(1 - cosine*cosine) amplifies sine error near multiples of pi.
+    /// Use separate sin_ps/cos_ps calls when their near-zero accuracy is required.
     static forcedinline std::pair<__m128, __m128> sincos_ps(__m128 angle);
 };
 

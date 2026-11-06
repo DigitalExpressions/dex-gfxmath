@@ -16,7 +16,7 @@ approximation domains, and examples. See also the
 required `GFXMATH_*` feature macros before including it; `GFXMATH_ALL` enables
 all implemented features. `FastMath.h` is independent of GfxMath and VCL and
 uses x86 intrinsics. Its API reference specifies the instruction-set and
-numerical requirements. These APIs do not require JUCE or Expressionist.
+numerical requirements.
 
 ```cpp
 #define GFXMATH_VEC3
@@ -42,8 +42,8 @@ ctest --test-dir build-tests -C Release --output-on-failure
 ```
 
 `GFXMATH_VECTORCLASS_DIR` must contain `vectorclass.h`. If omitted, CMake searches
-the sibling `vectorclass` directory and Expressionist's existing
-`build/_deps/vectorclass-src`. Otherwise, with `GFXMATH_FETCH_VECTORCLASS=ON`
+the sibling `vectorclass` directory and standard include locations. Otherwise,
+with `GFXMATH_FETCH_VECTORCLASS=ON`
 (the default), it fetches VCL at the pinned commit in `CMakeLists.txt`.
 
 Both test executables target AVX2 and require an AVX2-capable CPU. Checks remain
