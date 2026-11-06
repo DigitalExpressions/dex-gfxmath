@@ -46,6 +46,19 @@ if(BUILD_TESTING)
     add_test(NAME gfxmath.unit COMMAND gfxmath_tests)
     set_tests_properties(gfxmath.unit PROPERTIES LABELS "unit;simd" TIMEOUT 60)
 
+    add_executable(fastmath_tests tests/FastMathTests.cpp)
+    target_compile_features(fastmath_tests PRIVATE cxx_std_20)
+    target_include_directories(fastmath_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/Source")
+
+    if(MSVC)
+        target_compile_options(fastmath_tests PRIVATE /arch:AVX2 /W4)
+    else()
+        target_compile_options(fastmath_tests PRIVATE -mavx2 -Wall -Wextra)
+    endif()
+
+    add_test(NAME fastmath.unit COMMAND fastmath_tests)
+    set_tests_properties(fastmath.unit PROPERTIES LABELS "unit;simd;approximation" TIMEOUT 60)
+
     foreach(feature NONE VEC2 VEC3 VEC4 VECN RGBA ARGB MAP2D ALL)
         string(TOLOWER "${feature}" feature_name)
         add_library(gfxmath_feature_${feature_name} OBJECT tests/FeatureTests.cpp)

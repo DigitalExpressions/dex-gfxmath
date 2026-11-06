@@ -93,7 +93,9 @@ and canaries use zero tolerance or Boolean assertions.
   ARM/sse2neon, non-MSVC builds and every feature-macro combination need separate
   platform validation. Native AVX-512 compile probes can complement the AVX2
   suite but are distinct from a complete platform matrix.
-- `Source/FastMath.h` is a separate API and is outside this suite's scope.
+- `Source/FastMath.h` is a separate API tested by `fastmath.unit`, outside
+  `gfxmath.unit`. See its [API reference](fastmath-api.md) and
+  [coverage inventory](fastmath-test-coverage.md).
 
 This inventory describes behavioral and compilation coverage, not line/branch
 coverage or proof over every floating-point bit pattern. Run both Debug and

@@ -40,6 +40,7 @@
 #pragma once
 #include <immintrin.h>
 #include <cmath>
+#include <utility>
 
 #ifndef forcedinline
 #   if _MSC_VER
@@ -354,47 +355,62 @@ namespace FT
     }
 
     /* should be much more precise with large b, still ~3.3x faster. */
-    static forcedinline double pow_fast_precise_ankerl(double a, double b) {
+    static forcedinline double pow_fast_precise_ankerl(double a, double b)
+    {
         int flipped = 0;
-        if (b < 0) {
+        if (b < 0)
+        {
             flipped = 1;
             b = -b;
         }
 
         /* calculate approximation with fraction of the exponent */
         int e = (int)b;
-        union { double d; int x[2]; } u = { a };
+        union
+        {
+            double d;
+            int x[2];
+        } u = {a};
         u.x[1] = (int)((b - e) * (u.x[1] - 1072632447) + 1072632447);
         u.x[0] = 0;
 
         double r = 1.0;
-        while (e) {
-            if (e & 1) {
+        while (e)
+        {
+            if (e & 1)
+            {
                 r *= a;
             }
             a *= a;
             e >>= 1;
         }
 
-        r *= u.d;
+        r *= b == (double)(int)b ? 1.0 : u.d;
         return flipped ? 1.0 / r : r;
     }
 
     /* should be much more precise with large b, still ~3.3x faster. */
-    static forcedinline double pow_fast_precise(double a, double b) {
+    static forcedinline double pow_fast_precise(double a, double b)
+    {
         int flipped = 0;
-        if (b < 0) {
+        if (b < 0)
+        {
             flipped = 1;
             b = -b;
         }
 
         /* calculate approximation with fraction of the exponent */
         int e = (int)b;
-        double d = exp_fast(b - e);
+        const double fraction = b - e;
+        const double d = fraction == 0.0 ? 1.0 : pow_fast(a, fraction);
 
         double r = 1.0;
-        while (e) {
-            if (e & 1) r *= a;
+        while (e)
+        {
+            if (e & 1)
+            {
+                r *= a;
+            }
             a *= a;
             e >>= 1;
         }
@@ -403,20 +419,27 @@ namespace FT
         return flipped ? 1.0 / r : r;
     }
 
-    static forcedinline double better_pow_fast_precise(double a, double b) {
+    static forcedinline double better_pow_fast_precise(double a, double b)
+    {
         int flipped = 0;
-        if (b < 0) {
+        if (b < 0)
+        {
             flipped = 1;
             b = -b;
         }
 
         /* calculate approximation with fraction of the exponent */
         int e = (int)b;
-        double d = better_exp_fast(b - e);
+        const double fraction = b - e;
+        const double d = fraction == 0.0 ? 1.0 : better_exp_fast(fraction * log_fast(a));
 
         double r = 1.0;
-        while (e) {
-            if (e & 1) r *= a;
+        while (e)
+        {
+            if (e & 1)
+            {
+                r *= a;
+            }
             a *= a;
             e >>= 1;
         }
@@ -424,24 +447,31 @@ namespace FT
         r *= d;
         return flipped ? 1.0 / r : r;
     }
-
 
     /* should be much more precise with large b */
-    static forcedinline float powf_fast_precise(float a, float b) {
+    static forcedinline float powf_fast_precise(float a, float b)
+    {
         int flipped = 0;
-        if (b < 0) {
+        if (b < 0)
+        {
             flipped = 1;
             b = -b;
         }
 
         /* calculate approximation with fraction of the exponent */
         int e = (int)b;
-        union { float f; int x; } u = { a };
+        union
+        {
+            float f;
+            int x;
+        } u = {a};
         u.x = (int)((b - e) * (u.x - 1065353216) + 1065353216);
 
         float r = 1.0f;
-        while (e) {
-            if (e & 1) {
+        while (e)
+        {
+            if (e & 1)
+            {
                 r *= a;
             }
             a *= a;
@@ -453,20 +483,25 @@ namespace FT
     }
 
     /* should be much more precise with large b */
-    static forcedinline float better_powf_fast_precise(float a, float b) {
+    static forcedinline float better_powf_fast_precise(float a, float b)
+    {
         int flipped = 0;
-        if (b < 0) {
+        if (b < 0)
+        {
             flipped = 1;
             b = -b;
         }
 
         /* calculate approximation with fraction of the exponent */
         int e = (int)b;
-        float f = (float)better_expf_fast(b - e);
+        const float fraction = b - e;
+        const float f = fraction == 0.0f ? 1.0f : (float)better_expf_fast(fraction * logf_fast(a));
 
         float r = 1.0f;
-        while (e) {
-            if (e & 1) {
+        while (e)
+        {
+            if (e & 1)
+            {
                 r *= a;
             }
             a *= a;
@@ -502,22 +537,19 @@ static forcedinline float FT::atan(float x)
 
 static forcedinline float FT::atan2(float y, float x)
 {
-    if (fabs(x) > fabs(y))
+    if (y == 0.0f)
     {
-        float atan = FT::atan(y / x);
-        if (x > 0.0f)
-            return atan;
-        else
-            return y > 0.0f ? atan + pi : atan - pi;
+        return std::signbit(x) ? std::copysign(pi, y) : y;
     }
-    else
+
+    if (std::fabs(x) > std::fabs(y))
     {
-        float atan = FT::atan(x / y);
-        if (x > 0.0f)
-            return y > 0.0f ? halfpi - atan : -halfpi - atan;
-        else
-            return y > 0.0f ? halfpi + atan : -halfpi + atan;
+        const float angle = FT::atan(y / x);
+        return x > 0.0f ? angle : angle + std::copysign(pi, y);
     }
+
+    const float angle = FT::atan(x / y);
+    return std::copysign(halfpi, y) - angle;
 }
 
 static forcedinline float FT::cos_32s(float x)
@@ -525,7 +557,7 @@ static forcedinline float FT::cos_32s(float x)
     const float c1 = 0.99940307f;
     const float c2 = -0.49558072f;
     const float c3 = 0.03679168f;
-    float x2;      // The input argument squared
+    float x2; // The input argument squared
     x2 = x * x;
     return (c1 + x2 * (c2 + c3 * x2));
 }
@@ -607,22 +639,24 @@ static forcedinline __m128 FT::atan_ps(__m128 x)
 
 static forcedinline __m128 FT::atan2_ps(__m128 y, __m128 x)
 {
-    __m128 absxgreaterthanabsy = _mm_cmpgt_ps(_mm_andnot_ps(SIGNMASK, x), _mm_andnot_ps(SIGNMASK, y));
-    __m128 ratio = _mm_div_ps(_mm_add_ps(_mm_and_ps(absxgreaterthanabsy, y), _mm_andnot_ps(absxgreaterthanabsy, x)),
-        _mm_add_ps(_mm_and_ps(absxgreaterthanabsy, x), _mm_andnot_ps(absxgreaterthanabsy, y)));
-    __m128 atan = FT::atan_ps(ratio);
+    const __m128 zero = _mm_setzero_ps();
+    const __m128 xDominates = _mm_cmpgt_ps(_mm_andnot_ps(SIGNMASK, x), _mm_andnot_ps(SIGNMASK, y));
+    const __m128 numerator = _mm_or_ps(_mm_and_ps(xDominates, y), _mm_andnot_ps(xDominates, x));
+    const __m128 denominator = _mm_or_ps(_mm_and_ps(xDominates, x), _mm_andnot_ps(xDominates, y));
+    const __m128 zeroY = _mm_cmpeq_ps(y, zero);
+    const __m128 safeDenominator = _mm_or_ps(_mm_and_ps(zeroY, _mm_set1_ps(1.0f)), _mm_andnot_ps(zeroY, denominator));
+    __m128 angle = FT::atan_ps(_mm_div_ps(numerator, safeDenominator));
+    angle = _mm_xor_ps(angle, _mm_andnot_ps(xDominates, SIGNMASK));
 
-    __m128 xgreaterthan0 = _mm_cmpgt_ps(x, _mm_set1_ps(0.0f));
-    __m128 ygreaterthan0 = _mm_cmpgt_ps(y, _mm_set1_ps(0.0f));
+    __m128 shift = _mm_or_ps(_mm_set1_ps(halfpi), _mm_and_ps(SIGNMASK, y));
+    const __m128 fullShift = _mm_or_ps(_mm_set1_ps(pi), _mm_and_ps(SIGNMASK, y));
+    shift = _mm_or_ps(_mm_and_ps(xDominates, fullShift), _mm_andnot_ps(xDominates, shift));
+    shift = _mm_andnot_ps(_mm_and_ps(xDominates, _mm_cmpgt_ps(x, zero)), shift);
 
-    atan = _mm_xor_ps(atan, _mm_andnot_ps(absxgreaterthanabsy, _mm_and_ps(xgreaterthan0, SIGNMASK))); //negate atan if absx<=absy & x>0
-
-    __m128 shift = _mm_set1_ps(pi);
-    shift = _mm_sub_ps(shift, _mm_andnot_ps(absxgreaterthanabsy, _mm_set1_ps(halfpi))); //substract halfpi if absx<=absy
-    shift = _mm_xor_ps(shift, _mm_andnot_ps(ygreaterthan0, SIGNMASK)); //negate shift if y<=0
-    shift = _mm_andnot_ps(_mm_and_ps(absxgreaterthanabsy, xgreaterthan0), shift); //null if abs>absy & x>0
-
-    return _mm_add_ps(atan, shift);
+    const __m128 result = _mm_add_ps(angle, shift);
+    const __m128 negativeX = _mm_castsi128_ps(_mm_srai_epi32(_mm_castps_si128(x), 31));
+    const __m128 axisAngle = _mm_or_ps(_mm_and_ps(negativeX, fullShift), _mm_andnot_ps(negativeX, y));
+    return _mm_or_ps(_mm_and_ps(zeroY, axisAngle), _mm_andnot_ps(zeroY, result));
 }
 
 static forcedinline __m128 FT::cos_32s_ps(__m128 x)
@@ -748,22 +782,19 @@ static forcedinline float FTA::atan(float x)
 
 static forcedinline float FTA::atan2(float y, float x)
 {
-    if (fabs(x) > fabs(y)) 
+    if (y == 0.0f)
     {
-        float atan = FTA::atan(y / x);
-        if (x > 0.0f)
-            return atan;
-        else
-            return y > 0.0f ? atan + FT::pi : atan - FT::pi;
+        return std::signbit(x) ? std::copysign(FT::pi, y) : y;
     }
-    else 
+
+    if (std::fabs(x) > std::fabs(y))
     {
-        float atan = FTA::atan(x / y);
-        if (x > 0.0f)
-            return y > 0.0f ? FT::halfpi - atan : -FT::halfpi - atan;
-        else
-            return y > 0.0f ? FT::halfpi + atan : -FT::halfpi + atan;
+        const float angle = FTA::atan(y / x);
+        return x > 0.0f ? angle : angle + std::copysign(FT::pi, y);
     }
+
+    const float angle = FTA::atan(x / y);
+    return std::copysign(FT::halfpi, y) - angle;
 }
 
 static forcedinline float FTA::cos_52s(float x)
@@ -772,7 +803,7 @@ static forcedinline float FTA::cos_52s(float x)
     const float c2 = -0.4999124376f;
     const float c3 = 0.0414877472f;
     const float c4 = -0.0012712095f;
-    float x2;      // The input argument squared
+    float x2; // The input argument squared
     x2 = x * x;
     return (c1 + x2 * (c2 + x2 * (c3 + c4 * x2)));
 }
@@ -857,22 +888,24 @@ static forcedinline __m128 FTA::atan_ps(__m128 x)
 
 static forcedinline __m128 FTA::atan2_ps(__m128 y, __m128 x)
 {
-    __m128 absxgreaterthanabsy = _mm_cmpgt_ps(_mm_andnot_ps(FT::SIGNMASK, x), _mm_andnot_ps(FT::SIGNMASK, y));
-    __m128 ratio = _mm_div_ps(_mm_add_ps(_mm_and_ps(absxgreaterthanabsy, y), _mm_andnot_ps(absxgreaterthanabsy, x)),
-        _mm_add_ps(_mm_and_ps(absxgreaterthanabsy, x), _mm_andnot_ps(absxgreaterthanabsy, y)));
-    __m128 atan = FTA::atan_ps(ratio);
+    const __m128 zero = _mm_setzero_ps();
+    const __m128 xDominates = _mm_cmpgt_ps(_mm_andnot_ps(FT::SIGNMASK, x), _mm_andnot_ps(FT::SIGNMASK, y));
+    const __m128 numerator = _mm_or_ps(_mm_and_ps(xDominates, y), _mm_andnot_ps(xDominates, x));
+    const __m128 denominator = _mm_or_ps(_mm_and_ps(xDominates, x), _mm_andnot_ps(xDominates, y));
+    const __m128 zeroY = _mm_cmpeq_ps(y, zero);
+    const __m128 safeDenominator = _mm_or_ps(_mm_and_ps(zeroY, _mm_set1_ps(1.0f)), _mm_andnot_ps(zeroY, denominator));
+    __m128 angle = FTA::atan_ps(_mm_div_ps(numerator, safeDenominator));
+    angle = _mm_xor_ps(angle, _mm_andnot_ps(xDominates, FT::SIGNMASK));
 
-    __m128 xgreaterthan0 = _mm_cmpgt_ps(x, _mm_set1_ps(0.0f));
-    __m128 ygreaterthan0 = _mm_cmpgt_ps(y, _mm_set1_ps(0.0f));
+    __m128 shift = _mm_or_ps(_mm_set1_ps(FT::halfpi), _mm_and_ps(FT::SIGNMASK, y));
+    const __m128 fullShift = _mm_or_ps(_mm_set1_ps(FT::pi), _mm_and_ps(FT::SIGNMASK, y));
+    shift = _mm_or_ps(_mm_and_ps(xDominates, fullShift), _mm_andnot_ps(xDominates, shift));
+    shift = _mm_andnot_ps(_mm_and_ps(xDominates, _mm_cmpgt_ps(x, zero)), shift);
 
-    atan = _mm_xor_ps(atan, _mm_andnot_ps(absxgreaterthanabsy, _mm_and_ps(xgreaterthan0, FT::SIGNMASK))); //negate atan if absx<=absy & x>0
-
-    __m128 shift = _mm_set1_ps(FT::pi);
-    shift = _mm_sub_ps(shift, _mm_andnot_ps(absxgreaterthanabsy, _mm_set1_ps(FT::halfpi))); //substract halfpi if absx<=absy
-    shift = _mm_xor_ps(shift, _mm_andnot_ps(ygreaterthan0, FT::SIGNMASK)); //negate shift if y<=0
-    shift = _mm_andnot_ps(_mm_and_ps(absxgreaterthanabsy, xgreaterthan0), shift); //null if abs>absy & x>0
-
-    return _mm_add_ps(atan, shift);
+    const __m128 result = _mm_add_ps(angle, shift);
+    const __m128 negativeX = _mm_castsi128_ps(_mm_srai_epi32(_mm_castps_si128(x), 31));
+    const __m128 axisAngle = _mm_or_ps(_mm_and_ps(negativeX, fullShift), _mm_andnot_ps(negativeX, y));
+    return _mm_or_ps(_mm_and_ps(zeroY, axisAngle), _mm_andnot_ps(zeroY, result));
 }
 
 static forcedinline __m128 FTA::cos_52s_ps(__m128 x)
@@ -881,13 +914,13 @@ static forcedinline __m128 FTA::cos_52s_ps(__m128 x)
     const __m128 c2 = _mm_set1_ps(-0.4999124376f);
     const __m128 c3 = _mm_set1_ps(0.0414877472f);
     const __m128 c4 = _mm_set1_ps(-0.0012712095f);
-    __m128 x2;      // The input argument squared
+    __m128 x2; // The input argument squared
     x2 = _mm_mul_ps(x, x);
     //               (c1+           x2*          (c2+           x2*          (c3+           c4*x2)));
     return _mm_add_ps(c1, _mm_mul_ps(x2, _mm_add_ps(c2, _mm_mul_ps(x2, _mm_add_ps(c3, _mm_mul_ps(c4, x2))))));
 }
 
-static forcedinline __m128 FTA::cos_ps(__m128 angle) 
+static forcedinline __m128 FTA::cos_ps(__m128 angle)
 {
     //clamp to the range 0..2pi
 
