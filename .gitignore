@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+
+# Standalone CMake builds
+/build/
+/build-tests/

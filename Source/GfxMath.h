@@ -32,23 +32,34 @@
 
 #pragma once
 
+#include <algorithm>
+#include <array>
+#include <bit>
 #include <cassert>
 #include <chrono>
+#include <climits>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
+#include <limits>
 #include <random>
+#include <tuple>
+#include <type_traits>
+#include <utility>
 
-  // 4127=conditional expression is constant, 4702=Unreachable code, 4201=anonymous struct
+// 4127=conditional expression is constant, 4702=Unreachable code, 4201=anonymous struct
 #if defined(_MSC_VER)
-#   pragma warning(push)
-#   pragma warning(disable : 4127 4702 4201)  
+#pragma warning(push)
+#pragma warning(disable : 4127 4702 4201)
 #endif
 
 #ifndef forcedinline
-#   if _MSC_VER
-#       define forcedinline       __forceinline
-#   else
-#       define forcedinline       inline __attribute__((always_inline))
-#   endif
+#if _MSC_VER
+#define forcedinline __forceinline
+#else
+#define forcedinline inline __attribute__((always_inline))
+#endif
 #endif
 
 #if __arm64__
@@ -64,54 +75,58 @@
 #endif
 
 #include "vectorclass.h"
+#include "vectormath_exp.h"
+#include "vectormath_trig.h"
+
+// RGB and RGBA aliases use the corresponding three- and four-component vectors.
+#if defined(GFXMATH_RGBA)
+#ifndef GFXMATH_VEC3
+#define GFXMATH_VEC3
+#endif
+#ifndef GFXMATH_VEC4
+#define GFXMATH_VEC4
+#endif
+#endif
 
 namespace dex
 {
 
-	template <typename>
-	constexpr bool always_false = false;
+    template <typename> constexpr bool always_false = false;
 
-	// horizontal_and. Returns true if all bits in mask are 1
-	static inline bool horizontal_and(Vec4fb const a, int mask) {
-		return _mm_movemask_ps(a) == mask;
-	}
+    // Returns true when every selected lane is set in the mask.
+    template <typename Mask> static inline bool horizontal_and(const Mask value, int mask)
+    {
+        return (to_bits(value) & mask) == mask;
+    }
 
-	// horizontal_or. Returns true if at least one bit in mask is 1
-	static inline bool horizontal_or(Vec4fb const a, int mask) {
-		return (_mm_movemask_ps(a) & mask) != 0;
-	}
+    // Returns true when any selected lane is set in the mask.
+    template <typename Mask> static inline bool horizontal_or(const Mask value, int mask)
+    {
+        return (to_bits(value) & mask) != 0;
+    }
 
 #if defined(GFXMATH_VECN) || defined(GFXMATH_ALL)
-	// horizontal_and. Returns true if all bits are 1
-	static inline bool horizontal_and(Vec8fb const a, int mask) {
-		return _mm256_movemask_ps(a) == mask;
-	}
+    // Some sequence code inspired by The Art of C++ / Sequences
+    // https://github.com/taocpp/sequences
 
-	// horizontal_or. Returns true if at least one bit is 1
-	static inline bool horizontal_or(Vec8fb const a, int mask) {
-		return (_mm256_movemask_ps(a) & mask) != 0;
-	}
+    namespace seq
+    {
+        namespace impl
+        {
+            template <size_t, typename T> struct indexed
+            {
+                using type = T;
+            };
 
-	// Some sequence code inspired by The Art of C++ / Sequences
-	// https://github.com/taocpp/sequences
+            template <typename, typename... Ts> struct indexer;
 
-	namespace seq
-	{
-		namespace impl
-		{
-			template <size_t, typename T>
-			struct indexed { using type = T; };
-
-			template <typename, typename... Ts>
-			struct indexer;
-
-			template <size_t... Is, typename... Ts>
+            template <size_t... Is, typename... Ts>
 			struct indexer<std::index_sequence<Is...>, Ts...> : indexed<Is, Ts>... {};
 			template <size_t I, typename T>
 			indexed<I, T> select(const indexed< I, T >&);
-		}
+        }
 
-		template <size_t I, typename... Ts>
+        template <size_t I, typename... Ts>
 		using at_index = decltype(impl::select<I>(impl::indexer<std::index_sequence_for<Ts... >, Ts...>()));
 
 		// At index
@@ -175,33 +190,31 @@ namespace dex
 
 		namespace impl // Modify
 		{
-			template <size_t F(size_t), typename Seq>
-			struct modify;
-			template <size_t F(size_t), size_t... Ints>
-			struct modify<F, std::index_sequence<Ints...>>
-			{
-				using type = std::index_sequence<F(Ints)...>;
-			};
-		}
+            template <size_t F(size_t), typename Seq> struct modify;
+            template <size_t F(size_t), size_t... Ints> struct modify<F, std::index_sequence<Ints...>>
+            {
+                using type = std::index_sequence<F(Ints)...>;
+            };
+        }
 
-		// Modify the sequence by applying a constexpr function F on every element of the sequence
-		template <size_t F(size_t), typename Seq>
-		using modify_t = typename impl::modify<F, Seq>::type;
+        // Modify the sequence by applying a constexpr function F on every element of the sequence
+        template <size_t F(size_t), typename Seq> using modify_t = typename impl::modify<F, Seq>::type;
 
-		namespace impl // Sum
-		{
-			template <typename T, T... Ns>
-			struct sum : std::integral_constant<T, (T(0) + ... + Ns)> {};
-			template <typename T, T... Ns>
-			struct sum<std::integer_sequence<T, Ns...>> : sum<T, Ns...> {};
-		}
+        namespace impl // Sum
+        {
+            template <typename T, T... Ns> struct sum : std::integral_constant<T, (T(0) + ... + Ns)>
+            {
+            };
+            template <typename T, T... Ns> struct sum<std::integer_sequence<T, Ns...>> : sum<T, Ns...>
+            {
+            };
+        }
 
-		// Sum elements of a sequence
-		template <typename T, T... Ns>
-		constexpr T sum_v = impl::sum<T, Ns...>::value;
+        // Sum elements of a sequence
+        template <typename T, T... Ns> constexpr auto sum_v = impl::sum<T, Ns...>::value;
 
-		namespace impl // Partial sum
-		{
+        namespace impl // Partial sum
+        {
 			template <size_t, typename S, typename = std::make_index_sequence<S::size()>>
 			struct partial_sum;
 			template <size_t I, typename T, T... Ns, size_t... Is>
@@ -233,10 +246,9 @@ namespace dex
 		}
 		template <typename Seq>
 		constexpr auto seqToArray = impl::seq_to_array<Seq>::ar;
-	}
+    }
 
-
-	template <typename First, typename... Tail>
+    template <typename First, typename... Tail>
 	struct FirstType { using type = First; };
 	template <typename First, typename... Tail>
 	using FirstType_t = typename FirstType<First, Tail...>::type;
@@ -279,7 +291,11 @@ namespace dex
 
 	template <int Size> struct Double { using type = void; };
 	template <> struct Double<1> { using type = double; };
-	template <> struct Double<4> { using type = double4; };
+    template <> struct Double<2>
+    {
+        using type = double2;
+    };
+    template <> struct Double<4> { using type = double4; };
 	template <> struct Double<8> { using type = double8; };
 	template <int Size> using Double_t = typename Double<Size>::type;
 
@@ -287,7 +303,27 @@ namespace dex
 	template <int Size> struct Vector<float, Size> { using type = Float_t<Size>; };
 	template <int Size> struct Vector<double, Size> { using type = Double_t<Size>; };
 	template <int Size> struct Vector<Vec4f, Size> { using type = Vec4f; };
-	template <typename T, int Size> using Vector_t = typename Vector<T, Size>::type;
+    template <int Size> struct Vector<Vec8f, Size>
+    {
+        using type = Vec8f;
+    };
+    template <int Size> struct Vector<Vec16f, Size>
+    {
+        using type = Vec16f;
+    };
+    template <int Size> struct Vector<Vec2d, Size>
+    {
+        using type = Vec2d;
+    };
+    template <int Size> struct Vector<Vec4d, Size>
+    {
+        using type = Vec4d;
+    };
+    template <int Size> struct Vector<Vec8d, Size>
+    {
+        using type = Vec8d;
+    };
+    template <typename T, int Size> using Vector_t = typename Vector<T, Size>::type;
 
 	template <int ElementType> struct ScalarElement { using type = void; };
 	template <> struct ScalarElement<2> { using type = bool; };
@@ -323,35 +359,102 @@ namespace dex
 	template <> struct IntVector<double> { using type = int64_t; };
 	template <> struct IntVector<Vec4f> { using type = Vec4i; };
 	template <> struct IntVector<Vec8f> { using type = Vec8i; };
-	template <> struct IntVector<Vec2d> { using type = Vec2q; };
+    template <> struct IntVector<Vec16f>
+    {
+        using type = Vec16i;
+    };
+    template <> struct IntVector<Vec2d> { using type = Vec2q; };
 	template <> struct IntVector<Vec4d> { using type = Vec4q; };
-	template <> struct IntVector<Vec4fb> { using type = int32_t; };
+    template <> struct IntVector<Vec8d>
+    {
+        using type = Vec8q;
+    };
+    template <> struct IntVector<Vec4fb> { using type = int32_t; };
 	template <> struct IntVector<Vec8fb> { using type = int32_t; };
-	template <> struct IntVector<Vec2db> { using type = int64_t; };
-	template <> struct IntVector<Vec4db> { using type = int64_t; };
-	template <typename T> using IntType = typename IntVector<T>::type;
+    template <> struct IntVector<Vec16fb>
+    {
+        using type = int32_t;
+    };
+    template <> struct IntVector<Vec2db> { using type = int64_t; };
+// Compact AVX512 masks share the float mask specializations above.
+#if INSTRSET < 10
+    template <> struct IntVector<Vec4db>
+    {
+        using type = int64_t;
+    };
+    template <> struct IntVector<Vec8db>
+    {
+        using type = int64_t;
+    };
+#endif
+    template <typename T> using IntType = typename IntVector<T>::type;
 
-	template <typename T> struct UIntVector { using type = void; };
-	template <> struct UIntVector<float> { using type = uint32_t; };
-	template <> struct UIntVector<double> { using type = uint64_t; };
-	template <> struct UIntVector<Vec4f> { using type = Vec4ui; };
-	template <> struct UIntVector<Vec8f> { using type = Vec8ui; };
-	template <> struct UIntVector<Vec2d> { using type = Vec2uq; };
-	template <> struct UIntVector<Vec4d> { using type = Vec4uq; };
-	template <typename T> using UIntType = typename UIntVector<T>::type;
+    template <typename T> struct UIntVector
+    {
+        using type = void;
+    };
+    template <> struct UIntVector<float>
+    {
+        using type = uint32_t;
+    };
+    template <> struct UIntVector<double>
+    {
+        using type = uint64_t;
+    };
+    template <> struct UIntVector<Vec4f>
+    {
+        using type = Vec4ui;
+    };
+    template <> struct UIntVector<Vec8f>
+    {
+        using type = Vec8ui;
+    };
+    template <> struct UIntVector<Vec16f>
+    {
+        using type = Vec16ui;
+    };
+    template <> struct UIntVector<Vec2d>
+    {
+        using type = Vec2uq;
+    };
+    template <> struct UIntVector<Vec4d>
+    {
+        using type = Vec4uq;
+    };
+    template <> struct UIntVector<Vec8d>
+    {
+        using type = Vec8uq;
+    };
+    template <typename T> using UIntType = typename UIntVector<T>::type;
 
-	template <typename T> struct FloatVector { using type = void; };
+    template <typename T> struct FloatVector { using type = void; };
 	template <> struct FloatVector<uint32_t> { using type = float; };
 	template <> struct FloatVector<uint64_t> { using type = double; };
 	template <> struct FloatVector<Vec4i> { using type = Vec4f; };
 	template <> struct FloatVector<Vec8i> { using type = Vec8f; };
-	template <> struct FloatVector<Vec2q> { using type = Vec2d; };
+    template <> struct FloatVector<Vec16i>
+    {
+        using type = Vec16f;
+    };
+    template <> struct FloatVector<Vec2q> { using type = Vec2d; };
 	template <> struct FloatVector<Vec4q> { using type = Vec4d; };
-	template <> struct FloatVector<Vec4ui> { using type = Vec4f; };
+    template <> struct FloatVector<Vec8q>
+    {
+        using type = Vec8d;
+    };
+    template <> struct FloatVector<Vec4ui> { using type = Vec4f; };
 	template <> struct FloatVector<Vec8ui> { using type = Vec8f; };
-	template <> struct FloatVector<Vec2uq> { using type = Vec2d; };
+    template <> struct FloatVector<Vec16ui>
+    {
+        using type = Vec16f;
+    };
+    template <> struct FloatVector<Vec2uq> { using type = Vec2d; };
 	template <> struct FloatVector<Vec4uq> { using type = Vec4d; };
-	template <typename T> using FloatType = typename FloatVector<T>::type;
+    template <> struct FloatVector<Vec8uq>
+    {
+        using type = Vec8d;
+    };
+    template <typename T> using FloatType = typename FloatVector<T>::type;
 
 	template <typename T> struct BoolVector { using type = void; using ARRAY = void; };
 	template <> struct BoolVector<float> { using type = bool; using ARRAY = bool*; };
@@ -389,348 +492,445 @@ namespace dex
 	template <> struct BoolVector<Vec4fb> { using type = Vec4ib; using ARRAY = uint32_t*; };
 	template <> struct BoolVector<Vec2db> { using type = Vec2qb; using ARRAY = uint64_t*; };
 	template <> struct BoolVector<Vec8fb> { using type = Vec8ib; using ARRAY = uint32_t*; };
-	template <> struct BoolVector<Vec4db> { using type = Vec4qb; using ARRAY = uint64_t*; };
-	template <typename T> using BoolType = typename BoolVector<T>::type;
-	template <typename T> using BoolArray = typename BoolVector<T>::ARRAY;
+    template <> struct BoolVector<Vec16fb>
+    {
+        using type = Vec16ib;
+        using ARRAY = uint32_t*;
+    };
+// Compact AVX512 masks share the float mask specializations above.
+#if INSTRSET < 10
+    template <> struct BoolVector<Vec4db>
+    {
+        using type = Vec4qb;
+        using ARRAY = uint64_t*;
+    };
+    template <> struct BoolVector<Vec8db>
+    {
+        using type = Vec8qb;
+        using ARRAY = uint64_t*;
+    };
+#endif
+    template <typename T> using BoolType = typename BoolVector<T>::type;
+    template <typename T> using BoolArray = typename BoolVector<T>::ARRAY;
 
-	template <int Size> using Bool_t = BoolType<Float_t<Size>>;
+    template <int Size> using Bool_t = BoolType<Float_t<Size>>;
 
-	template <typename T>
-	struct NumElements { static constexpr size_t elements = T::size(); };
-	template <> struct NumElements<float> { static constexpr size_t elements = 1; };
-	template <> struct NumElements<double> { static constexpr size_t elements = 1; };
-	template <typename T>
+    template <typename T> struct NumElements
+    {
+        static constexpr size_t elements = T::size();
+    };
+    template <> struct NumElements<float>
+    {
+        static constexpr size_t elements = 1;
+    };
+    template <> struct NumElements<double>
+    {
+        static constexpr size_t elements = 1;
+    };
+    template <> struct NumElements<bool>
+    {
+        static constexpr size_t elements = 1;
+    };
+    template <typename T>
 	constexpr size_t elements_v = NumElements<T>::elements;
 
 	// ----------------------------------------------------------------------------
 
-	static forcedinline float select(const bool s, const float a, const float b) { return s ? a : b; }
-	static forcedinline double selectd(const bool s, const double a, const double b) { return s ? a : b; }
+    template <typename T, std::enable_if_t<std::is_arithmetic_v<T>, int> = 0> static forcedinline T select(bool condition, T a, T b)
+    {
+        return condition ? a : b;
+    }
 
-	template <typename T> constexpr forcedinline T min(T a, T b)
-	{
-		if constexpr (std::is_arithmetic_v<T>)
-			return std::min(a, b);
-		else
-			return select(b < a, b, a);
-	}
-	template <typename T> constexpr forcedinline T min(T a, T b, T c) { return min(a, min(b, c)); }
-	template <typename T> constexpr forcedinline T min(T a, T b, T c, T d) { return min(a, min(b, c, d)); }
-	template <typename T> constexpr forcedinline T max(T a, T b)
-	{
-		if constexpr (std::is_arithmetic_v<T>)
-			return std::max(a, b);
-		else
-			return select(a < b, b, a);
-	}
-	template <typename T> constexpr forcedinline T max(T a, T b, T c) { return max(a, max(b, c)); }
-	template <typename T> constexpr forcedinline T max(T a, T b, T c, T d) { return max(a, max(b, c, d)); }
+    static forcedinline double selectd(bool condition, double a, double b)
+    {
+        return select(condition, a, b);
+    }
 
-	template <typename T>
-	constexpr forcedinline T clamp(T value, T lo, T hi) { return max(lo, min(hi, value)); }
-	template <typename T>
-	constexpr forcedinline T saturate(T v) { return clamp(v, T(0), T(1)); }
-	template <typename T>
-	constexpr forcedinline T trunc(T a) { if constexpr (std::is_arithmetic_v<T>) return std::trunc(a); else return truncate(a); }
-	template <typename T>
-	constexpr forcedinline T fract(T a) { return a - trunc(a); }
-	template <typename T>
-	constexpr forcedinline T mod(T a, T N) { return a - N * trunc(a / N); }
-	template <typename T>
-	constexpr forcedinline T roundDownAligned(T i, T align) { return (T)floor((T)i / (T)align) * align; }
-	template <typename T>
-	constexpr forcedinline T roundUpAligned(T i, T align) { return (T)ceil((T)i / (T)align) * align; }
-	template <typename T, typename L>
-	constexpr forcedinline T lerp(T a, T b, L t) noexcept { return a + t * (b - a); }
-	template <typename T, typename L>
-	constexpr forcedinline T smoothstep(T a, T b, L t) noexcept { auto k = clamp<T>((t - a) / (b - a), 0, 1); return k * k * (3 - 2 * k); }
-	template <typename T>
-	constexpr forcedinline T mix(T a, T b, T mix) noexcept { return b * mix + a * (1.0f - mix); }
-	template <typename T>
-	constexpr forcedinline auto hadd(T v) { if constexpr (std::is_arithmetic_v<T>) return v; else return horizontal_add(v); }
-	template <typename T>
-	constexpr forcedinline auto dot(T a, T b) { return hadd(a * b); }
+    template <typename T> constexpr forcedinline T min(T a, T b)
+    {
+        if constexpr (std::is_arithmetic_v<T>)
+        {
+            return std::min(a, b);
+        }
+        else
+        {
+            return select(b < a, b, a);
+        }
+    }
+    template <typename T> constexpr forcedinline T min(T a, T b, T c)
+    {
+        return min(a, min(b, c));
+    }
+    template <typename T> constexpr forcedinline T min(T a, T b, T c, T d)
+    {
+        return min(a, min(b, c, d));
+    }
+    template <typename T> constexpr forcedinline T max(T a, T b)
+    {
+        if constexpr (std::is_arithmetic_v<T>)
+        {
+            return std::max(a, b);
+        }
+        else
+        {
+            return select(a < b, b, a);
+        }
+    }
+    template <typename T> constexpr forcedinline T max(T a, T b, T c)
+    {
+        return max(a, max(b, c));
+    }
+    template <typename T> constexpr forcedinline T max(T a, T b, T c, T d)
+    {
+        return max(a, max(b, c, d));
+    }
 
+    template <typename T> constexpr forcedinline T clamp(T value, T lo, T hi)
+    {
+        return max(lo, min(hi, value));
+    }
+    template <typename T> constexpr forcedinline T saturate(T v)
+    {
+        return clamp(v, T(0), T(1));
+    }
+    template <typename T> constexpr forcedinline T trunc(T a)
+    {
+        if constexpr (std::is_arithmetic_v<T>)
+        {
+            return std::trunc(a);
+        }
+        else
+        {
+            return truncate(a);
+        }
+    }
+    template <typename T> constexpr forcedinline T fract(T a)
+    {
+        return a - trunc(a);
+    }
+    template <typename T> constexpr forcedinline T mod(T a, T N)
+    {
+        return a - N * trunc(a / N);
+    }
+    template <typename T> constexpr forcedinline T roundDownAligned(T i, T align)
+    {
+        if constexpr (std::is_integral_v<T>)
+        {
+            T quotient = i / align;
+            const T remainder = i % align;
 
-	template <typename B, typename T>
-	static forcedinline void copyArrayMasked(B mask, const T src, T& dest)
-	{
-		static constexpr size_t N = elements_v<B>;
-		if constexpr (N > 1)
-		{
-			BoolArray<B> m = BoolArray<B>(&mask);
-			if (m[0] != 0) dest[0] = src[0];
-			if constexpr (N > 1)
-				if (m[1] != 0) dest[1] = src[1];
-			if constexpr (N > 3)
-			{
-				if (m[2] != 0) dest[2] = src[2];
-				if (m[3] != 0) dest[3] = src[3];
-			}
-			if constexpr (N > 7)
-			{
-				if (m[4] != 0) dest[4] = src[4];
-				if (m[5] != 0) dest[5] = src[5];
-				if (m[6] != 0) dest[6] = src[6];
-				if (m[7] != 0) dest[7] = src[7];
-			}
-			if constexpr (N > 15)
-			{
-				if (m[8] != 0) dest[8] = src[8];
-				if (m[9] != 0) dest[9] = src[9];
-				if (m[10] != 0) dest[10] = src[10];
-				if (m[11] != 0) dest[11] = src[11];
-				if (m[12] != 0) dest[12] = src[12];
-				if (m[13] != 0) dest[13] = src[13];
-            if (m[14] != 0) dest[14] = src[14];
-            if (m[15] != 0) dest[15] = src[15];
-			}
-		}
-		else if (mask)
-			dest = src;
-	}
+            if (remainder != 0 && (remainder < 0) != (align < 0))
+            {
+                --quotient;
+            }
 
-	template <typename B, typename S, typename D>
-	static forcedinline void copyValueMasked(B mask, const S src, D& dest)
-	{
-		static constexpr size_t N = elements_v<B>;
-		if constexpr (N > 1)
-		{
-			BoolArray<B> m = BoolArray<B>(&mask);
-			if (m[0] != 0) dest[0] = src;
-			if constexpr (N > 1)
-				if (m[1] != 0) dest[1] = src;
-			if constexpr (N > 3)
-			{
-				if (m[2] != 0) dest[2] = src;
-				if (m[3] != 0) dest[3] = src;
-			}
-			if constexpr (N > 7)
-			{
-				if (m[4] != 0) dest[4] = src;
-				if (m[5] != 0) dest[5] = src;
-				if (m[6] != 0) dest[6] = src;
-				if (m[7] != 0) dest[7] = src;
-			}
-			if constexpr (N > 15)
-			{
-				if (m[8] != 0) dest[8] = src;
-				if (m[9] != 0) dest[9] = src;
-				if (m[10] != 0) dest[10] = src;
-				if (m[11] != 0) dest[11] = src;
-				if (m[12] != 0) dest[12] = src;
-				if (m[13] != 0) dest[13] = src;
-            if (m[14] != 0) dest[14] = src;
-            if (m[15] != 0) dest[15] = src;
-			}
-		}
-		else if (mask)
-			dest = src;
-	}
+            return quotient * align;
+        }
+        else
+        {
+            return floor(i / align) * align;
+        }
+    }
+    template <typename T> constexpr forcedinline T roundUpAligned(T i, T align)
+    {
+        if constexpr (std::is_integral_v<T>)
+        {
+            T quotient = i / align;
+            const T remainder = i % align;
 
-	template <typename T>
-	forcedinline T fast_atan2(T y, T x)
-	{
-		auto abs_y = abs(y) + 1e-10f; // kludge to prevent 0/0 condition
-		auto xay = x + abs_y;
-		auto ayx = abs_y - x;
-		T r = select(x < 0, xay / ayx, -ayx / xay);
-		T angle = select(x < 0, Pi<Scalar_t<T>> *0.75f, Pi<Scalar_t<T>> *0.25f) + (0.1963f * r * r - 0.9817f) * r;
-		return select(y < 0, -angle, angle);  // negate if in quad III or IV
-	}
+            if (remainder != 0 && (remainder < 0) == (align < 0))
+            {
+                ++quotient;
+            }
 
-	template <typename T>
-	forcedinline T fast_asin(T x)
-	{
-		static constexpr Scalar_t<T> k1 = -0.0187293f;
-		static constexpr Scalar_t<T> k2 = 0.0742610f;
-		static constexpr Scalar_t<T> k3 = -0.2121144f;
-		static constexpr Scalar_t<T> k4 = 1.5707288f;
+            return quotient * align;
+        }
+        else
+        {
+            return ceil(i / align) * align;
+        }
+    }
+    template <typename T, typename L> constexpr forcedinline T lerp(T a, T b, L t) noexcept
+    {
+        return a + t * (b - a);
+    }
+    template <typename T, typename L> constexpr forcedinline T smoothstep(T a, T b, L t) noexcept
+    {
+        auto k = clamp<T>((t - a) / (b - a), 0, 1);
+        return k * k * (3 - 2 * k);
+    }
+    template <typename T> constexpr forcedinline T mix(T a, T b, T mix) noexcept
+    {
+        return b * mix + a * (1.0f - mix);
+    }
+    template <typename T> constexpr forcedinline auto hadd(T v)
+    {
+        if constexpr (std::is_arithmetic_v<T>)
+        {
+            return v;
+        }
+        else
+        {
+            return horizontal_add(v);
+        }
+    }
+    template <typename T> constexpr forcedinline auto dot(T a, T b)
+    {
+        return hadd(a * b);
+    }
 
-		auto negate = x < 0;
-		T ret = k1;
-		x = abs(x);
-		ret *= x;
-		ret += k2;
-		ret *= x;
-		ret += k3;
-		ret *= x;
-		ret += k4;
-		ret = Pi<Scalar_t<T>> *Scalar_t <T>(0.5) - sqrt(1 - x) * ret;
+    template <typename B, typename S, typename D> static forcedinline void copyArrayMasked(B mask, const S src, D& dest)
+    {
+        if constexpr (elements_v<B> == 1)
+        {
+            if (mask)
+            {
+                dest = src;
+            }
+        }
+        else
+        {
+            for (size_t index = 0; index < elements_v<B>; ++index)
+            {
+                if (mask.extract(static_cast<int>(index)))
+                {
+                    dest[index] = src[index];
+                }
+            }
+        }
+    }
 
-		if constexpr (std::is_floating_point_v<T>)
-			return ret * T(1 - 2 * (int)negate);
-		else
-			return select(negate, -ret, ret);
-	}
+    template <typename B, typename S, typename D> static forcedinline void copyValueMasked(B mask, const S src, D& dest)
+    {
+        if constexpr (elements_v<B> == 1)
+        {
+            if (mask)
+            {
+                dest = src;
+            }
+        }
+        else
+        {
+            for (size_t index = 0; index < elements_v<B>; ++index)
+            {
+                if (mask.extract(static_cast<int>(index)))
+                {
+                    dest[index] = src;
+                }
+            }
+        }
+    }
 
-	template <typename T>
-	forcedinline T fast_acos(T x)
-	{
-		static constexpr Scalar_t<T> k1 = -0.0187293f;
-		static constexpr Scalar_t<T> k2 = 0.0742610f;
-		static constexpr Scalar_t<T> k3 = -0.2121144f;
-		static constexpr Scalar_t<T> k4 = 1.5707288f;
+    template <typename T> forcedinline T fast_atan2(T y, T x)
+    {
+        auto abs_y = abs(y) + 1e-10f; // kludge to prevent 0/0 condition
+        auto xay = x + abs_y;
+        auto ayx = abs_y - x;
+        T r = select(x < 0, xay / ayx, -ayx / xay);
+        T angle = select(x < 0, Pi<Scalar_t<T>> * 0.75f, Pi<Scalar_t<T>> * 0.25f) + (0.1963f * r * r - 0.9817f) * r;
+        return select(y < 0, -angle, angle); // negate if in quad III or IV
+    }
 
-		auto negate = x < 0.0f;
-		T ret = k1;
-		x = abs(x);
-		ret *= x;
-		ret += k2;
-		ret *= x;
-		ret += k3;
-		ret *= x;
-		ret += k4;
-		ret *= sqrt(1 - x);
+    template <typename T> forcedinline T fast_asin(T x)
+    {
+        static constexpr Scalar_t<T> k1 = -0.0187293f;
+        static constexpr Scalar_t<T> k2 = 0.0742610f;
+        static constexpr Scalar_t<T> k3 = -0.2121144f;
+        static constexpr Scalar_t<T> k4 = 1.5707288f;
 
-		if constexpr (std::is_floating_point_v<T>)
-			return T(negate) * (Pi<T> -2 * ret) + ret;
-		else
-			return select(negate, Pi<Scalar_t<T>> -ret, ret);
-	}
+        auto negate = x < 0;
+        T ret = k1;
+        x = abs(x);
+        ret *= x;
+        ret += k2;
+        ret *= x;
+        ret += k3;
+        ret *= x;
+        ret += k4;
+        ret = Pi<Scalar_t<T>> * Scalar_t<T>(0.5) - sqrt(1 - x) * ret;
 
-	template <typename T>
-	forcedinline T fast_rand(int* seed)
-	{
-		constexpr uint32_t k = 16807;
-		if constexpr (std::is_same_v<T, float>)
-		{
-			union
-			{
-				T fres;
-				uint32_t ires;
-			};
-			*seed *= k;
-			ires = ((((uint32_t)*seed) >> 9) | 0x3f800000);
-			return fres - 1.0f;
-		}
-		else
-		{
-			UIntType<T> res;
-			if constexpr (elements_v<T> == 4)
-			{
-				auto a1 = *seed *= k;
-				auto a2 = *seed *= k;
-				auto a3 = *seed *= k;
-				auto a4 = *seed *= k;
-				res = UIntType<T>(a1, a2, a3, a4);
-			}
-			else if constexpr (elements_v<T> == 8)
-			{
-				auto a1 = *seed *= k;
-				auto a2 = *seed *= k;
-				auto a3 = *seed *= k;
-				auto a4 = *seed *= k;
-				auto a5 = *seed *= k;
-				auto a6 = *seed *= k;
-				auto a7 = *seed *= k;
-				auto a8 = *seed *= k;
-				res = UIntType<T>(a1, a2, a3, a4, a5, a6, a7, a8);
-			}
-			res >>= 9;
-			res |= 0x3f800000;
-			return reinterpret_f(res) - 1.0f;
-		}
-	}
+        if constexpr (std::is_floating_point_v<T>)
+        {
+            return ret * T(1 - 2 * (int)negate);
+        }
+        else
+        {
+            return select(negate, -ret, ret);
+        }
+    }
 
-	template <typename T>
-	forcedinline T fast_randc(int* seed)
-	{
-		return (fast_rand<T>(seed) * 2.0 - 1.0);
-	}
+    template <typename T> forcedinline T fast_acos(T x)
+    {
+        static constexpr Scalar_t<T> k1 = -0.0187293f;
+        static constexpr Scalar_t<T> k2 = 0.0742610f;
+        static constexpr Scalar_t<T> k3 = -0.2121144f;
+        static constexpr Scalar_t<T> k4 = 1.5707288f;
 
-	template <typename T, int Iterations = 1>
-	forcedinline T approx_rsqrt(T number)
-	{
-		if constexpr (std::is_same_v<T, float>)
-		{
-			float x2 = number * 0.5f, y = number;
-			long i = *(long*)&y;
-			i = 0x5f3759df - (i >> 1);
-			y = *(float*)&i;
-			if constexpr (Iterations > 0)
-				y = y * (1.5f - (x2 * y * y));
-			if constexpr (Iterations > 1)
-				y = y * (1.5f - (x2 * y * y));
-			if constexpr (Iterations > 2)
-				y = y * (1.5f - (x2 * y * y));
-			return y;
-		}
-		else if constexpr (std::is_same_v<T, double>)
-		{
-			double x2 = number * 0.5, y = number;
-			long long i = *(long long*)&y;
-			i = 0x5fe6eb50c7b537a9 - (i >> 1);
-			y = *(double*)&i;
-			if constexpr (Iterations > 0)
-				y = y * (1.5f - (x2 * y * y));
-			if constexpr (Iterations > 1)
-				y = y * (1.5f - (x2 * y * y));
-			if constexpr (Iterations > 2)
-				y = y * (1.5f - (x2 * y * y));
-			return y;
-		}
-	}
+        auto negate = x < 0.0f;
+        T ret = k1;
+        x = abs(x);
+        ret *= x;
+        ret += k2;
+        ret *= x;
+        ret += k3;
+        ret *= x;
+        ret += k4;
+        ret *= sqrt(1 - x);
 
-	template <typename T, int Iterations = 1>
-	forcedinline T approx_sqrt(T number)
-	{
-		return approx_rsqrt(number) * number;
-	}
+        if constexpr (std::is_floating_point_v<T>)
+        {
+            return T(negate) * (Pi<T> - 2 * ret) + ret;
+        }
+        else
+        {
+            return select(negate, Pi<Scalar_t<T>> - ret, ret);
+        }
+    }
 
-	template<class RandomIt>
-	static void fast_shuffle(RandomIt first, RandomIt last, int* seed)
-	{
-		unsigned int itrange = static_cast<int>(last - first - 1);
-		using std::swap;
+    template <typename T> forcedinline T fast_rand(int* seed)
+    {
+        if constexpr (std::is_same_v<T, float>)
+        {
+            uint32_t state = std::bit_cast<uint32_t>(*seed);
+            state *= UINT32_C(16807);
+            *seed = std::bit_cast<int>(state);
+            return std::bit_cast<float>((state >> 9) | UINT32_C(0x3f800000)) - 1.0f;
+        }
+        else if constexpr (std::is_same_v<T, double>)
+        {
+            return static_cast<double>(fast_rand<float>(seed));
+        }
+        else
+        {
+            std::array<Scalar_t<T>, elements_v<T>> values{};
 
-		for (int i = itrange; i > 0; --i)
-		{
-			swap(first[i], first[static_cast<unsigned int>(fast_rand<float>(seed) * i)]);
-		}
-	}
+            for (auto& value : values)
+            {
+                value = fast_rand<Scalar_t<T>>(seed);
+            }
 
-	template<class RandomIt>
-	static void fast_partition_shuffle(RandomIt first, RandomIt last, int* seed, const int psize)
-	{
-		if (psize <= 1)
-			return fast_shuffle(first, last, seed);
+            T result;
+            result.load(values.data());
+            return result;
+        }
+    }
 
-		using std::swap;
+    template <typename T> forcedinline T fast_randc(int* seed)
+    {
+        return fast_rand<T>(seed) * T(2) - T(1);
+    }
 
-		while (first != last)
-		{
-			const int block_size = std::min<int>(psize, static_cast<int>(last - first));
+    template <typename T, int Iterations = 1> forcedinline T approx_rsqrt(T number)
+    {
+        if constexpr (std::is_floating_point_v<T>)
+        {
+            T estimate;
 
-			// Fisher-Yates shuffle within this partition
-			for (int i = block_size; --i > 0;)
-			{
-				// Uniformly map to [0, i]
-				const int j = static_cast<int>(fast_rand<float>(seed) * (i + 1));
-				swap(first[i], first[j]);
-			}
+            if constexpr (std::is_same_v<T, float>)
+            {
+                const uint32_t bits = UINT32_C(0x5f3759df) - (std::bit_cast<uint32_t>(number) >> 1);
+                estimate = std::bit_cast<float>(bits);
+            }
+            else
+            {
+                const uint64_t bits = UINT64_C(0x5fe6eb50c7b537a9) - (std::bit_cast<uint64_t>(number) >> 1);
+                estimate = std::bit_cast<double>(bits);
+            }
 
-			first += block_size;
-		}
-	}
+            const T half = number * T(0.5);
 
-	template<class RandomIt>
-	static void mt19937_shuffle(RandomIt first, RandomIt last, int& seed)
-	{
-		std::mt19937 mtrand(seed);
-		constexpr float mtrange = 1.0f / float(mtrand.max() - mtrand.min());
-		unsigned int itrange = static_cast<int>(last - first - 1);
+            for (int iteration = 0; iteration < std::min(Iterations, 3); ++iteration)
+            {
+                estimate *= T(1.5) - half * estimate * estimate;
+            }
 
-		using std::swap;
+            return estimate;
+        }
+        else
+        {
+            std::array<Scalar_t<T>, elements_v<T>> values{};
+            number.store(values.data());
 
-		for (int i = itrange; i > 0; --i)
-		{
-			float scale = float(mtrand() - mtrand.min()) * mtrange;
-			swap(first[i], first[itrange * scale]);
-		}
-	}
+            for (auto& value : values)
+            {
+                value = approx_rsqrt<Scalar_t<T>, Iterations>(value);
+            }
 
-	// Forward template declarations
+            T result;
+            result.load(values.data());
+            return result;
+        }
+    }
+
+    template <typename T, int Iterations = 1> forcedinline T approx_sqrt(T number)
+    {
+        return approx_rsqrt<T, Iterations>(number) * number;
+    }
+
+    template <class RandomIt> static void fast_shuffle(RandomIt first, RandomIt last, int* seed)
+    {
+        const auto count = last - first;
+
+        if (count <= 1)
+        {
+            return;
+        }
+
+        using std::swap;
+
+        for (auto index = count - 1; index > 0; --index)
+        {
+            const auto other = static_cast<decltype(count)>(fast_rand<float>(seed) * (index + 1));
+            swap(first[index], first[other]);
+        }
+    }
+
+    template <class RandomIt> static void fast_partition_shuffle(RandomIt first, RandomIt last, int* seed, const int psize)
+    {
+        if (psize <= 1)
+        {
+            return fast_shuffle(first, last, seed);
+        }
+
+        using std::swap;
+
+        while (first != last)
+        {
+            const int block_size = std::min<int>(psize, static_cast<int>(last - first));
+
+            // Fisher-Yates shuffle within this partition
+            for (int i = block_size; --i > 0;)
+            {
+                // Uniformly map to [0, i]
+                const int j = static_cast<int>(fast_rand<float>(seed) * (i + 1));
+                swap(first[i], first[j]);
+            }
+
+            first += block_size;
+        }
+    }
+
+    template <class RandomIt> static void mt19937_shuffle(RandomIt first, RandomIt last, int& seed)
+    {
+        const auto count = last - first;
+
+        if (count <= 1)
+        {
+            return;
+        }
+
+        std::mt19937 engine(static_cast<uint32_t>(seed));
+        using Difference = typename std::iterator_traits<RandomIt>::difference_type;
+        using std::swap;
+
+        for (Difference index = count - 1; index > 0; --index)
+        {
+            std::uniform_int_distribution<Difference> distribution(0, index);
+            swap(first[index], first[distribution(engine)]);
+        }
+    }
+
+    // Forward template declarations
 	template <typename T> static forcedinline T hash11(T p);
 
 #if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
@@ -817,169 +1017,224 @@ namespace dex
 	* ----------------------------------------------------------------
 	*/
 #if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
-	template <typename T>
-	class vec2
-	{
-	public:
-		using Scalar = Scalar_t<T>;
-		struct Value { T _[2]; };
-		static constexpr int size() { return 2; }
-		union
-		{
-			struct { T x, y; };
-			struct { T u, v; };
-			struct { T left, right; };
-			Value value;
-		};
+    template <typename T> class vec2
+    {
+    public:
+        using Scalar = Scalar_t<T>;
+        struct Value
+        {
+            T _[2];
+        };
+        static constexpr int size() { return 2; }
+        union
+        {
+            struct
+            {
+                T x, y;
+            };
+            struct
+            {
+                T u, v;
+            };
+            struct
+            {
+                T left, right;
+            };
+            Value value;
+        };
 
-		constexpr vec2() : x(0), y(0) {}
-		constexpr vec2(T v) : x(v), y(v) {}
-		constexpr vec2(T x, T y) : x(x), y(y) {}
-		constexpr vec2(const vec2<Scalar>& v) : x(v.x), y(v.y) {}
-		constexpr vec2(const Value& v) : value(v) {}
-		template <typename FP>
-		constexpr vec2(typename std::enable_if_t<!std::is_same_v<T, FP>&& std::is_floating_point_v<T>&& std::is_floating_point_v<FP>, const vec2<FP>&> v) : x(v.x), y(v.y) {}
+        constexpr vec2() : x(0), y(0) {}
+        constexpr vec2(T v) : x(v), y(v) {}
+        template <typename Q = T, typename std::enable_if_t<!std::is_arithmetic_v<Q>, bool> = true> constexpr vec2(Scalar v) : x(v), y(v) {}
+        constexpr vec2(T x, T y) : x(x), y(y) {}
+        constexpr vec2(const vec2<Scalar>& v) : x(v.x), y(v.y) {}
+        constexpr vec2(const Value& v) : value(v) {}
+        template <typename FP,
+            typename std::enable_if_t<!std::is_same_v<T, FP> && std::is_floating_point_v<T> && std::is_floating_point_v<FP>, bool> = true>
+        constexpr vec2(const vec2<FP>& v) : x(v.x), y(v.y)
+        {
+        }
 
-		template <typename AS>
-		forcedinline operator vec2<AS>() const noexcept { return vec2<AS>{ AS(x), AS(y) }; }
+        template <typename AS> forcedinline operator vec2<AS>() const noexcept { return vec2<AS>{AS(x), AS(y)}; }
 
-		forcedinline void insert(int index, const vec2<Scalar> value)
-		{
-			if constexpr (elements_v<T> > 1)
-			{
-				x.insert(index, value.x);
-				y.insert(index, value.y);
-			}
-			else
-				*this = value;
-		}
+        forcedinline void insert(int index, const vec2<Scalar> value)
+        {
+            if constexpr (elements_v<T> > 1)
+            {
+                x.insert(index, value.x);
+                y.insert(index, value.y);
+            }
+            else
+                *this = value;
+        }
 
-		forcedinline vec2<Scalar> extract(int index) const
-		{
-			if constexpr (elements_v<T> > 1)
-				return { x.extract(index), y.extract(index) };
-			else
-				return *this;
-		}
+        forcedinline vec2<Scalar> extract(int index) const
+        {
+            if constexpr (elements_v<T> > 1)
+                return {x.extract(index), y.extract(index)};
+            else
+                return *this;
+        }
 
-		forcedinline vec2<Scalar> operator[](int index) const
-		{
-			return extract(index);
-		}
+        forcedinline vec2<Scalar> operator[](int index) const { return extract(index); }
 
-		template <typename Q = T, typename std::enable_if_t<!std::is_arithmetic_v<Q>, bool> = true>
-		forcedinline const auto concatenate2(const vec2 a) const noexcept
-		{
-			using CT = Vector_t<Scalar, elements_v<T> * 2>;
-			return vec2<CT>(concatenate2(x, a.x), concatenate2(y, a.y));
-		}
+        template <typename Q = T,
+            typename std::enable_if_t<!std::is_arithmetic_v<Q> && !std::is_void_v<Vector_t<Scalar_t<Q>, elements_v<Q> * 2>>, bool> = true>
+        forcedinline const auto concatenate2(const vec2 a) const noexcept
+        {
+            using CT = Vector_t<Scalar, elements_v<T> * 2>;
+            return vec2<CT>(CT(x, a.x), CT(y, a.y));
+        }
 
-		template <typename Q = T, typename std::enable_if_t<!std::is_arithmetic_v<Q>, bool> = true>
-		forcedinline const auto get_low() const noexcept
-		{
-			using CT = Vector_t<Scalar, elements_v<T> / 2>;
-			return vec2<CT>(x.get_low(), y.get_low());
-		}
+        template <typename Q = T,
+            typename std::enable_if_t<!std::is_arithmetic_v<Q> && !std::is_void_v<Vector_t<Scalar_t<Q>, elements_v<Q> / 2>>, bool> = true>
+        forcedinline const auto get_low() const noexcept
+        {
+            using CT = Vector_t<Scalar, elements_v<T> / 2>;
+            if constexpr (elements_v<T> == 2)
+            {
+                return vec2<CT>(x.extract(0), y.extract(0));
+            }
+            else
+            {
+                return vec2<CT>(x.get_low(), y.get_low());
+            }
+        }
 
-		template <typename Q = T, typename std::enable_if_t<!std::is_arithmetic_v<Q>, bool> = true>
-		forcedinline const auto get_high() const noexcept
-		{
-			using CT = Vector_t<Scalar, elements_v<T> / 2>;
-			return vec2<CT>(x.get_high(), y.get_high());
-		}
+        template <typename Q = T,
+            typename std::enable_if_t<!std::is_arithmetic_v<Q> && !std::is_void_v<Vector_t<Scalar_t<Q>, elements_v<Q> / 2>>, bool> = true>
+        forcedinline const auto get_high() const noexcept
+        {
+            using CT = Vector_t<Scalar, elements_v<T> / 2>;
+            if constexpr (elements_v<T> == 2)
+            {
+                return vec2<CT>(x.extract(1), y.extract(1));
+            }
+            else
+            {
+                return vec2<CT>(x.get_high(), y.get_high());
+            }
+        }
 
+        forcedinline vec2 operator+=(const vec2 a) noexcept
+        {
+            x += a.x;
+            y += a.y;
+            return *this;
+        }
+        forcedinline vec2 operator-=(const vec2 a) noexcept
+        {
+            x -= a.x;
+            y -= a.y;
+            return *this;
+        }
+        forcedinline vec2 operator*=(const vec2 a) noexcept
+        {
+            x *= a.x;
+            y *= a.y;
+            return *this;
+        }
+        forcedinline vec2 operator/=(const vec2 a) noexcept
+        {
+            x /= a.x;
+            y /= a.y;
+            return *this;
+        }
 
-		forcedinline vec2 operator+= (const vec2 a) noexcept { x += a.x; y += a.y; return *this; }
-		forcedinline vec2 operator-= (const vec2 a) noexcept { x -= a.x; y -= a.y; return *this; }
-		forcedinline vec2 operator*= (const vec2 a) noexcept { x *= a.x; y *= a.y; return *this; }
-		forcedinline vec2 operator/= (const vec2 a) noexcept { x /= a.x; y /= a.y; return *this; }
+        forcedinline vec2 operator+(const vec2 a) const noexcept { return {x + a.x, y + a.y}; }
+        forcedinline vec2 operator-(const vec2 a) const noexcept { return {x - a.x, y - a.y}; }
+        forcedinline vec2 operator-() const noexcept { return {-x, -y}; }
+        forcedinline vec2 operator*(const vec2 a) const noexcept { return {x * a.x, y * a.y}; }
+        forcedinline vec2 operator/(const vec2 a) const noexcept { return {x / a.x, y / a.y}; }
 
-		forcedinline vec2 operator+ (const vec2 a) const noexcept { return { x + a.x, y + a.y }; }
-		forcedinline vec2 operator- (const vec2 a) const noexcept { return { x - a.x, y - a.y }; }
-		forcedinline vec2 operator- ()              const noexcept { return { -x, -y }; }
-		forcedinline vec2 operator* (const vec2 a) const noexcept { return { x * a.x, y * a.y }; }
-		forcedinline vec2 operator/ (const vec2 a) const noexcept { return { x / a.x, y / a.y }; }
+        forcedinline vec2 operator==(const vec2 a) const noexcept { return {select(x == a.x, T(1), T(0)), select(y == a.y, T(1), T(0))}; }
+        forcedinline vec2 operator>(const vec2 a) const noexcept { return {select(x > a.x, T(1), T(0)), select(y > a.y, T(1), T(0))}; }
+        forcedinline vec2 operator>=(const vec2 a) const noexcept { return {select(x >= a.x, T(1), T(0)), select(y >= a.y, T(1), T(0))}; }
+        forcedinline vec2 operator<(const vec2 a) const noexcept { return {select(x < a.x, T(1), T(0)), select(y < a.y, T(1), T(0))}; }
+        forcedinline vec2 operator<=(const vec2 a) const noexcept { return {select(x <= a.x, T(1), T(0)), select(y <= a.y, T(1), T(0))}; }
 
-		forcedinline vec2 operator== (const vec2 a) const noexcept
-		{
-			return { T(x == a.x), T(y == a.y) };
-		}
-		forcedinline vec2 operator> (const vec2 a) const noexcept
-		{
-			return { T(x > a.x), T(y > a.y) };
-		}
-		forcedinline vec2 operator>= (const vec2 a) const noexcept
-		{
-			return { T(x >= a.x), T(y >= a.y) };
-		}
-		forcedinline vec2 operator< (const vec2 a) const noexcept
-		{
-			return { T(x < a.x), T(y < a.y) };
-		}
-		forcedinline vec2 operator<= (const vec2 a) const noexcept
-		{
-			return { T(x <= a.x), T(y <= a.y) };
-		}
+        forcedinline BoolType<T> equals(const vec2 a) const noexcept { return x == a.x && y == a.y; }
+        forcedinline BoolType<T> greaterThan(const vec2 a) const noexcept { return x > a.x && y > a.y; }
+        forcedinline BoolType<T> greaterThanOrEquals(const vec2 a) const noexcept { return x >= a.x && y >= a.y; }
+        forcedinline BoolType<T> lessThan(const vec2 a) const noexcept { return x < a.x && y < a.y; }
+        forcedinline BoolType<T> lessThanOrEquals(const vec2 a) const noexcept { return x <= a.x && y <= a.y; }
 
-		forcedinline BoolType<T> equals(const vec2 a) const noexcept { return x == a.x && y == a.y; }
-		forcedinline BoolType<T> greaterThan(const vec2 a) const noexcept { return x > a.x && y > a.y; }
-		forcedinline BoolType<T> greaterThanOrEquals(const vec2 a) const noexcept { return x >= a.x && y >= a.y; }
-		forcedinline BoolType<T> lessThan(const vec2 a) const noexcept { return x < a.x && y < a.y; }
-		forcedinline BoolType<T> lessThanOrEquals(const vec2 a) const noexcept { return x <= a.x && y <= a.y; }
-
-		forcedinline T sum() const noexcept { return x + y; }
-		forcedinline T prod() const noexcept { return x * y; }
-		forcedinline T dot(vec2 a) const noexcept { return x * a.x + y * a.y; }
-		forcedinline T length() const noexcept { return sqrt(lengthSquared()); }
-		forcedinline T lengthSquared() const noexcept { return x * x + y * y; }
-		forcedinline vec2& normalize() noexcept { auto l = 1 / (length() + Epsilon<Scalar>); *this *= l; return *this; }
-		forcedinline vec2 normalized() const noexcept { auto l = 1 / (length() + Epsilon<Scalar>); return *this * l; }
-		forcedinline vec2 limit(float lim = 1.0f) const noexcept
-		{
-			T m = max(x, y);
-			if constexpr (std::is_floating_point_v<T>)
-			{
-				auto lm = lim / m;
-				return select(m > 1.0f, operator*(lm), *this);
-			}
-			else
-			{
-				auto tm = m > lim;
-				auto lm = lim / m;
-				return { select(tm, x * lm, x), select(tm, y * lm, y) };
-			}
-		}
-		static forcedinline vec2 fast_unit_random() // Currently for float only
-		{
-			static int seed = (int)(fract(std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count()) * INT_MAX);
-			auto u = fast_rand<T>(&seed), v = fast_rand<T>(&seed);
-			return (vec2{ u, v } - 0.5f).normalized();
-		}
+        forcedinline T sum() const noexcept { return x + y; }
+        forcedinline T prod() const noexcept { return x * y; }
+        forcedinline T dot(vec2 a) const noexcept { return x * a.x + y * a.y; }
+        forcedinline T length() const noexcept { return sqrt(lengthSquared()); }
+        forcedinline T lengthSquared() const noexcept { return x * x + y * y; }
+        forcedinline vec2& normalize() noexcept
+        {
+            auto l = 1 / (length() + Epsilon<Scalar>);
+            *this *= l;
+            return *this;
+        }
+        forcedinline vec2 normalized() const noexcept
+        {
+            auto l = 1 / (length() + Epsilon<Scalar>);
+            return *this * l;
+        }
+        forcedinline vec2 limit(float lim = 1.0f) const noexcept
+        {
+            T m = max(x, y);
+            if constexpr (std::is_floating_point_v<T>)
+            {
+                auto lm = lim / m;
+                return select(m > lim, operator*(lm), *this);
+            }
+            else
+            {
+                auto tm = m > lim;
+                auto lm = lim / m;
+                return {select(tm, x * lm, x), select(tm, y * lm, y)};
+            }
+        }
+        static forcedinline vec2 fast_unit_random() // Currently for float only
+        {
+            static int seed =
+                (int)(fract(std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count()) * INT_MAX);
+            auto u = fast_rand<T>(&seed), v = fast_rand<T>(&seed);
+            return (vec2{u, v} - 0.5f).normalized();
+        }
 
     forcedinline vec2<T> xy() const noexcept { return { x, y }; }   forcedinline vec2<T> uu() const noexcept { return { x, x }; }
     forcedinline vec2<T> xx() const noexcept { return { x, x }; }   forcedinline vec2<T> uv() const noexcept { return { x, y }; }
 		forcedinline vec2<T> yx() const noexcept { return { y, x }; }   forcedinline vec2<T> vu() const noexcept { return { y, x }; }
 		forcedinline vec2<T> yy() const noexcept { return { y, y }; }   forcedinline vec2<T> vv() const noexcept { return { y, y }; }
 
-		template <int A0>
-		forcedinline T get() const noexcept { jassert(A0 < size()); return value._[A0]; }
-		template <int A0>
-		forcedinline void set(T a0) const noexcept { jassert(A0 < size()); value._[A0] = a0; }
-		template <int A0, int A1>
-		forcedinline vec2<T> get() const noexcept { jassert(max(A0, A1) < size()); return { value._[A0], value._[A1] }; }
-		template <int A0, int A1>
-		forcedinline void set(T a0, T a1) const noexcept { jassert(max(A0, A1) < size()); value._[A0] = a0; value._[A1] = a1; }
+        template <int A0> forcedinline T get() const noexcept
+        {
+            assert(A0 < size());
+            return value._[A0];
+        }
+        template <int A0> forcedinline void set(T a0) noexcept
+        {
+            assert(A0 < size());
+            value._[A0] = a0;
+        }
+        template <int A0, int A1> forcedinline vec2<T> get() const noexcept
+        {
+            assert(max(A0, A1) < size());
+            return {value._[A0], value._[A1]};
+        }
+        template <int A0, int A1> forcedinline void set(T a0, T a1) noexcept
+        {
+            assert(max(A0, A1) < size());
+            value._[A0] = a0;
+            value._[A1] = a1;
+        }
 
-		static constexpr int elementtype()
-		{
-			if constexpr (std::is_same_v<T, float>)
-				return 16;
-			else if constexpr (std::is_same_v<T, double>)
-				return 17;
-			else
-				return T::elementtype();
-		}
-	};
+        static constexpr int elementtype()
+        {
+            if constexpr (std::is_same_v<T, float>)
+                return 16;
+            else if constexpr (std::is_same_v<T, double>)
+                return 17;
+            else
+                return T::elementtype();
+        }
+    };
 #endif //GFXMATH_VEC2
 
 	/*
@@ -988,183 +1243,248 @@ namespace dex
 	* ----------------------------------------------------------------
 	*/
 #if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
-	template <typename T>
-	class vec3
-	{
-	public:
-		using Scalar = Scalar_t<T>;
-		struct Value { T _[3]; };
-		static constexpr int size() { return 3; }
-		union
-		{
-			struct { T x, y, z; };
-			struct { T u, v, w; };
-			struct { T r, g, b; };
-			Value value;
-			T array[3];
-			Vector_t<T, 4> vcl;
-		};
+    template <typename T> class vec3
+    {
+    public:
+        using Scalar = Scalar_t<T>;
+        struct Value
+        {
+            T _[3];
+        };
+        static constexpr int size() { return 3; }
+        union
+        {
+            struct
+            {
+                T x, y, z;
+            };
+            struct
+            {
+                T u, v, w;
+            };
+            struct
+            {
+                T r, g, b;
+            };
+            Value value;
+            T array[3];
+            Vector_t<T, 4> vcl;
+        };
 
-		constexpr vec3() : x(0.0f), y(0.0f), z(0.0f) {}
-		constexpr vec3(T v) : x(v), y(v), z(v) {}
-		constexpr vec3(T x, T y, T z) : x(x), y(y), z(z) {}
+        constexpr vec3() : x(0.0f), y(0.0f), z(0.0f) {}
+        constexpr vec3(T v) : x(v), y(v), z(v) {}
+        template <typename Q = T, typename std::enable_if_t<!std::is_arithmetic_v<Q>, bool> = true>
+        constexpr vec3(Scalar v) : x(v), y(v), z(v)
+        {
+        }
+        constexpr vec3(T x, T y, T z) : x(x), y(y), z(z) {}
 #if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
-		constexpr vec3(T x, const vec2<T> v2) : x(x), y(v2.x), z(v2.y) {}
-		constexpr vec3(const vec2<T> v2, T z = {}) : x(v2.x), y(v2.y), z(z) {}
+        constexpr vec3(T x, const vec2<T> v2) : x(x), y(v2.x), z(v2.y) {}
+        constexpr vec3(const vec2<T> v2, T z = {}) : x(v2.x), y(v2.y), z(z) {}
 #endif
-		constexpr vec3(const vec3<Scalar>& v) : x(v.x), y(v.y), z(v.z) {}
-		template <typename FP>
-		constexpr vec3(typename std::enable_if_t<!std::is_same_v<T, FP>&& std::is_floating_point_v<T>&& std::is_floating_point_v<FP>, const vec3<FP>&> v) : x(v.x), y(v.y), z(v.z) {}
+        constexpr vec3(const vec3<Scalar>& v) : x(v.x), y(v.y), z(v.z) {}
+        template <typename FP,
+            typename std::enable_if_t<!std::is_same_v<T, FP> && std::is_floating_point_v<T> && std::is_floating_point_v<FP>, bool> = true>
+        constexpr vec3(const vec3<FP>& v) : x(v.x), y(v.y), z(v.z)
+        {
+        }
 #if defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
-		constexpr vec3(const vec4<Scalar>& v) : x(v.x), y(v.y), z(v.z) {}
+        constexpr vec3(const vec4<Scalar>& v) : x(v.x), y(v.y), z(v.z) {}
+        template <typename Q = T, typename std::enable_if_t<!std::is_arithmetic_v<Q>, bool> = true>
+        constexpr vec3(const vec4<T>& v) : x(v.x), y(v.y), z(v.z)
+        {
+        }
 #endif
-		constexpr vec3(const Value& v) : value(v) {}
+        constexpr vec3(const Value& v) : value(v) {}
 
-		forcedinline void insert(int index, const vec3<Scalar>& value)
-		{
-			if constexpr (elements_v<T> > 1)
-			{
-				x.insert(index, value.x);
-				y.insert(index, value.y);
-				z.insert(index, value.z);
-			}
-			else
-				*this = value;
-		}
+        forcedinline void insert(int index, const vec3<Scalar>& value)
+        {
+            if constexpr (elements_v<T> > 1)
+            {
+                x.insert(index, value.x);
+                y.insert(index, value.y);
+                z.insert(index, value.z);
+            }
+            else
+                *this = value;
+        }
 
-		forcedinline vec3<Scalar> extract(int index) const
-		{
-			if constexpr (elements_v<T> > 1)
-				return { x.extract(index), y.extract(index), z.extract(index) };
-			else
-				return *this;
-		}
+        forcedinline vec3<Scalar> extract(int index) const
+        {
+            if constexpr (elements_v<T> > 1)
+                return {x.extract(index), y.extract(index), z.extract(index)};
+            else
+                return *this;
+        }
 
-		forcedinline vec3<Scalar> operator[](int index) const
-		{
-			return extract(index);
-		}
+        forcedinline vec3<Scalar> operator[](int index) const { return extract(index); }
 
-		template <typename Q = T, typename std::enable_if_t<!std::is_arithmetic_v<Q>, bool> = true>
-		forcedinline const auto concatenate2(const vec3 a) const noexcept
-		{
-			using CT = Vector_t<Scalar, elements_v<T> * 2>;
-			return vec3<CT>(concatenate2(x, a.x), concatenate2(y, a.y), concatenate2(z, a.z));
-		}
+        template <typename Q = T,
+            typename std::enable_if_t<!std::is_arithmetic_v<Q> && !std::is_void_v<Vector_t<Scalar_t<Q>, elements_v<Q> * 2>>, bool> = true>
+        forcedinline const auto concatenate2(const vec3 a) const noexcept
+        {
+            using CT = Vector_t<Scalar, elements_v<T> * 2>;
+            return vec3<CT>(CT(x, a.x), CT(y, a.y), CT(z, a.z));
+        }
 
-		template <typename Q = T, typename std::enable_if_t<!std::is_arithmetic_v<Q>, bool> = true>
-		forcedinline const auto get_low() const noexcept
-		{
-			using CT = Vector_t<Scalar, elements_v<T> / 2>;
-			return vec3<CT>(x.get_low(), y.get_low(), z.get_low());
-		}
+        template <typename Q = T,
+            typename std::enable_if_t<!std::is_arithmetic_v<Q> && !std::is_void_v<Vector_t<Scalar_t<Q>, elements_v<Q> / 2>>, bool> = true>
+        forcedinline const auto get_low() const noexcept
+        {
+            using CT = Vector_t<Scalar, elements_v<T> / 2>;
+            if constexpr (elements_v<T> == 2)
+            {
+                return vec3<CT>(x.extract(0), y.extract(0), z.extract(0));
+            }
+            else
+            {
+                return vec3<CT>(x.get_low(), y.get_low(), z.get_low());
+            }
+        }
 
-		template <typename Q = T, typename std::enable_if_t<!std::is_arithmetic_v<Q>, bool> = true>
-		forcedinline const auto get_high() const noexcept
-		{
-			using CT = Vector_t<Scalar, elements_v<T> / 2>;
-			return vec3<CT>(x.get_high(), y.get_high(), z.get_high());
-		}
+        template <typename Q = T,
+            typename std::enable_if_t<!std::is_arithmetic_v<Q> && !std::is_void_v<Vector_t<Scalar_t<Q>, elements_v<Q> / 2>>, bool> = true>
+        forcedinline const auto get_high() const noexcept
+        {
+            using CT = Vector_t<Scalar, elements_v<T> / 2>;
+            if constexpr (elements_v<T> == 2)
+            {
+                return vec3<CT>(x.extract(1), y.extract(1), z.extract(1));
+            }
+            else
+            {
+                return vec3<CT>(x.get_high(), y.get_high(), z.get_high());
+            }
+        }
 
-		forcedinline vec3& operator+= (const vec3& a) noexcept { x += a.x; y += a.y; z += a.z; return *this; }
-		forcedinline vec3& operator-= (const vec3& a) noexcept { x -= a.x; y -= a.y; z -= a.z; return *this; }
-		forcedinline vec3& operator*= (const vec3& a) noexcept { x *= a.x; y *= a.y; z *= a.z; return *this; }
-		forcedinline vec3& operator/= (const vec3& a) noexcept { x /= a.x; y /= a.y; z /= a.z; return *this; }
+        forcedinline vec3& operator+=(const vec3& a) noexcept
+        {
+            x += a.x;
+            y += a.y;
+            z += a.z;
+            return *this;
+        }
+        forcedinline vec3& operator-=(const vec3& a) noexcept
+        {
+            x -= a.x;
+            y -= a.y;
+            z -= a.z;
+            return *this;
+        }
+        forcedinline vec3& operator*=(const vec3& a) noexcept
+        {
+            x *= a.x;
+            y *= a.y;
+            z *= a.z;
+            return *this;
+        }
+        forcedinline vec3& operator/=(const vec3& a) noexcept
+        {
+            x /= a.x;
+            y /= a.y;
+            z /= a.z;
+            return *this;
+        }
 
-		forcedinline vec3 operator+ (const vec3& a) const noexcept { return { x + a.x, y + a.y, z + a.z }; }
-		forcedinline vec3 operator- (const vec3& a) const noexcept { return { x - a.x, y - a.y, z - a.z }; }
-		forcedinline vec3 operator- ()              const noexcept { return { -x, -y, -z }; }
-		forcedinline vec3 operator* (const vec3& a) const noexcept { return { x * a.x, y * a.y, z * a.z }; }
-		forcedinline vec3 operator/ (const vec3& a) const noexcept { return { x / a.x, y / a.y, z / a.z }; }
+        forcedinline vec3 operator+(const vec3& a) const noexcept { return {x + a.x, y + a.y, z + a.z}; }
+        forcedinline vec3 operator-(const vec3& a) const noexcept { return {x - a.x, y - a.y, z - a.z}; }
+        forcedinline vec3 operator-() const noexcept { return {-x, -y, -z}; }
+        forcedinline vec3 operator*(const vec3& a) const noexcept { return {x * a.x, y * a.y, z * a.z}; }
+        forcedinline vec3 operator/(const vec3& a) const noexcept { return {x / a.x, y / a.y, z / a.z}; }
 
-		forcedinline vec3 operator== (const vec3& a) const noexcept
-		{
-			return { T(x == a.x), T(y == a.y), T(z == a.z) };
-		}
-		forcedinline vec3 operator> (const vec3& a) const noexcept
-		{
-			return { T(x > a.x), T(y > a.y), T(z > a.z) };
-		}
-		forcedinline vec3 operator>= (const vec3& a) const noexcept
-		{
-			return { T(x >= a.x), T(y >= a.y), T(z >= a.z) };
-		}
-		forcedinline vec3 operator< (const vec3& a) const noexcept
-		{
-			return { T(x < a.x), T(y < a.y), T(z < a.z) };
-		}
-		forcedinline vec3 operator<= (const vec3& a) const noexcept
-		{
-			return { T(x <= a.x), T(y <= a.y), T(z <= a.z) };
-		}
+        forcedinline vec3 operator==(const vec3& a) const noexcept
+        {
+            return {select(x == a.x, T(1), T(0)), select(y == a.y, T(1), T(0)), select(z == a.z, T(1), T(0))};
+        }
+        forcedinline vec3 operator>(const vec3& a) const noexcept
+        {
+            return {select(x > a.x, T(1), T(0)), select(y > a.y, T(1), T(0)), select(z > a.z, T(1), T(0))};
+        }
+        forcedinline vec3 operator>=(const vec3& a) const noexcept
+        {
+            return {select(x >= a.x, T(1), T(0)), select(y >= a.y, T(1), T(0)), select(z >= a.z, T(1), T(0))};
+        }
+        forcedinline vec3 operator<(const vec3& a) const noexcept
+        {
+            return {select(x < a.x, T(1), T(0)), select(y < a.y, T(1), T(0)), select(z < a.z, T(1), T(0))};
+        }
+        forcedinline vec3 operator<=(const vec3& a) const noexcept
+        {
+            return {select(x <= a.x, T(1), T(0)), select(y <= a.y, T(1), T(0)), select(z <= a.z, T(1), T(0))};
+        }
 
-		forcedinline BoolType<T> equals(const vec3& a) const noexcept { return x == a.x && y == a.y && z == a.z; }
-		forcedinline BoolType<T> greaterThan(const vec3& a) const noexcept { return x > a.x && y > a.y && z > a.z; }
-		forcedinline BoolType<T> greaterThanOrEquals(const vec3& a) const noexcept { return x >= a.x && y >= a.y && z >= a.z; }
-		forcedinline BoolType<T> lessThan(const vec3& a) const noexcept { return x < a.x && y < a.y && z < a.z; }
-		forcedinline BoolType<T> lessThanOrEquals(const vec3& a) const noexcept { return x <= a.x && y <= a.y && z <= a.z; }
+        forcedinline BoolType<T> equals(const vec3& a) const noexcept { return x == a.x && y == a.y && z == a.z; }
+        forcedinline BoolType<T> greaterThan(const vec3& a) const noexcept { return x > a.x && y > a.y && z > a.z; }
+        forcedinline BoolType<T> greaterThanOrEquals(const vec3& a) const noexcept { return x >= a.x && y >= a.y && z >= a.z; }
+        forcedinline BoolType<T> lessThan(const vec3& a) const noexcept { return x < a.x && y < a.y && z < a.z; }
+        forcedinline BoolType<T> lessThanOrEquals(const vec3& a) const noexcept { return x <= a.x && y <= a.y && z <= a.z; }
 
-		forcedinline T dot(const vec3& a) const noexcept { return x * a.x + y * a.y + z * a.z; }
-		forcedinline vec3 cross(const vec3& a) const noexcept { return { y * a.z - z * a.y, z * a.x - x * a.z, x * a.y - y * a.x }; }
+        forcedinline T dot(const vec3& a) const noexcept { return x * a.x + y * a.y + z * a.z; }
+        forcedinline vec3 cross(const vec3& a) const noexcept { return {y * a.z - z * a.y, z * a.x - x * a.z, x * a.y - y * a.x}; }
 
-		forcedinline T sum() const noexcept { return x + y + z; }
-		forcedinline T prod() const noexcept { return x * y * z; }
-		forcedinline T length() const noexcept { return sqrt(lengthSquared()); }
-		forcedinline T lengthSquared() const noexcept { return x * x + y * y + z * z; }
-		forcedinline T distance(const vec3<T> v) const noexcept { return vec3<T>(vcl - v.vcl).length(); }
-		forcedinline T distanceSquared(const vec3<T> v) const noexcept { return vec3<T>(vcl - v.vcl).lengthSquared(); }
-		forcedinline vec3& normalize() noexcept { *this /= (length() + Epsilon<Scalar>); return *this; }
-		forcedinline vec3 normalized() const noexcept { return *this / (length() + Epsilon<Scalar>); }
-		forcedinline vec3& normalizex() noexcept
-		{
-			auto len = length();
-			auto lr = 1.0f / (len == 0.0f ? Epsilon<Scalar> : len);
-			*this *= lr;
-			return *this;
-		}
-		forcedinline vec3 normalizedx() const noexcept
-		{
-			auto len = length();
-			return *this / (len == 0.0f ? Epsilon<Scalar> : len);
-		}
-		forcedinline vec3 limit(float lim = 1.0f) const noexcept
-		{
-			T m = max(x, y, z);
-			if constexpr (std::is_floating_point_v<T>)
-			{
-				auto lm = lim / m;
-				return select(m > 1.0f, operator*(lm), *this);
-			}
-			else
-			{
-				auto tm = m > lim;
-				auto lm = lim / m;
-				return { select(tm, x * lm, x), select(tm, y * lm, y), select(tm, z * lm, z) };
-			}
-		}
-		static forcedinline vec3 fast_unit_random() noexcept
-		{
-			static int seed = (int)(fract(std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count()) * INT_MAX);
-			auto x = fast_rand<T>(&seed), y = fast_rand<T>(&seed), z = fast_rand<T>(&seed);
-			return (vec3{ x, y, z } - 0.5f).normalized();
-		}
+        forcedinline T sum() const noexcept { return x + y + z; }
+        forcedinline T prod() const noexcept { return x * y * z; }
+        forcedinline T length() const noexcept { return sqrt(lengthSquared()); }
+        forcedinline T lengthSquared() const noexcept { return x * x + y * y + z * z; }
+        forcedinline T distance(const vec3<T> v) const noexcept { return (*this - v).length(); }
+        forcedinline T distanceSquared(const vec3<T> v) const noexcept { return (*this - v).lengthSquared(); }
+        forcedinline vec3& normalize() noexcept
+        {
+            *this /= (length() + Epsilon<Scalar>);
+            return *this;
+        }
+        forcedinline vec3 normalized() const noexcept { return *this / (length() + Epsilon<Scalar>); }
+        forcedinline vec3& normalizex() noexcept
+        {
+            auto len = length();
+            auto lr = 1.0f / select(len == T(0), T(Epsilon<Scalar>), len);
+            *this *= lr;
+            return *this;
+        }
+        forcedinline vec3 normalizedx() const noexcept
+        {
+            auto len = length();
+            return *this / select(len == T(0), T(Epsilon<Scalar>), len);
+        }
+        forcedinline vec3 limit(float lim = 1.0f) const noexcept
+        {
+            T m = max(x, y, z);
+            if constexpr (std::is_floating_point_v<T>)
+            {
+                auto lm = lim / m;
+                return select(m > lim, operator*(lm), *this);
+            }
+            else
+            {
+                auto tm = m > lim;
+                auto lm = lim / m;
+                return {select(tm, x * lm, x), select(tm, y * lm, y), select(tm, z * lm, z)};
+            }
+        }
+        static forcedinline vec3 fast_unit_random() noexcept
+        {
+            static int seed =
+                (int)(fract(std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count()) * INT_MAX);
+            auto x = fast_rand<T>(&seed), y = fast_rand<T>(&seed), z = fast_rand<T>(&seed);
+            return (vec3{x, y, z} - 0.5f).normalized();
+        }
 
-		static forcedinline vec3 xyz_rand(int* seed, const float& offset = -0.5f)
-		{
-			vec3<T> v = vec3<T>(fast_rand<Vector_t<T, 4>>(seed) + offset);
-			return v;
-		}
-		static forcedinline vec3 xz_rand(int* seed, const float& offset = -0.5f)
-		{
-			vec3<T> v = vec3<T>(fast_rand<Vector_t<T, 4>>(seed) + offset);
-			v.y = T(0.0);
-			return v;
-		}
-		static forcedinline vec3 xyzmult_rand(int* seed, const vec3<T> mult)
-		{
-			vec3<T> v = vec3<T>(fast_rand<Vector_t<T, 4>>(seed) - 0.5f) * mult;
-			return v;
-		}
+        static forcedinline vec3 xyz_rand(int* seed, const float& offset = -0.5f)
+        {
+            const T randomX = fast_rand<T>(seed) + offset;
+            const T randomY = fast_rand<T>(seed) + offset;
+            const T randomZ = fast_rand<T>(seed) + offset;
+            return {randomX, randomY, randomZ};
+        }
+
+        static forcedinline vec3 xz_rand(int* seed, const float& offset = -0.5f)
+        {
+            auto result = xyz_rand(seed, offset);
+            result.y = T(0);
+            return result;
+        }
+
+        static forcedinline vec3 xyzmult_rand(int* seed, const vec3<T> mult) { return xyz_rand(seed) * mult; }
 
 #if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
 		forcedinline vec2<T> xx() const noexcept { return { x, x }; }       forcedinline vec2<T> rr() const noexcept { return { r, r }; }       forcedinline vec2<T> uu() const noexcept { return { x, x }; }
@@ -1206,49 +1526,94 @@ namespace dex
 		forcedinline vec3<T> zzy() const noexcept { return { z, z, y }; }   forcedinline vec3<T> bbg() const noexcept { return { b, b, g }; }   forcedinline vec3<T> wwv() const noexcept { return { z, z, y }; }
 		forcedinline vec3<T> zzz() const noexcept { return { z, z, z }; }   forcedinline vec3<T> bbb() const noexcept { return { b, b, b }; }   forcedinline vec3<T> www() const noexcept { return { z, z, z }; }
 
-		template <int A0>
-		forcedinline T get() const noexcept { assert(A0 < size()); return value._[A0]; }
-		template <int A0>
-		forcedinline void set(T a0) const noexcept { assert(A0 < size()); value._[A0] = a0; }
+        template <int A0> forcedinline T get() const noexcept
+        {
+            assert(A0 < size());
+            return value._[A0];
+        }
+        template <int A0> forcedinline void set(T a0) noexcept
+        {
+            assert(A0 < size());
+            value._[A0] = a0;
+        }
 #if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
-		template <int A0, int A1>
-		forcedinline vec2<T> get() const noexcept { assert(max(A0, A1) < size()); return { value._[A0], value._[A1] }; }
+        template <int A0, int A1> forcedinline vec2<T> get() const noexcept
+        {
+            assert(max(A0, A1) < size());
+            return {value._[A0], value._[A1]};
+        }
 #endif
-		template <int A0, int A1>
-		forcedinline void set(T a0, T a1) const noexcept { assert(max(A0, A1) < size()); value._[A0] = a0; value._[A1] = a1; }
-		template <int A0, int A1, int A2>
-		forcedinline vec3<T> get() const noexcept { assert(max(A0, A1, A2) < size()); return { value._[A0], value._[A1], value._[A2] }; }
-		template <int A0, int A1, int A2>
-		forcedinline void set(T a0, T a1, T a2) const noexcept { assert(max(A0, A1, A2) < size()); value._[A0] = a0; value._[A1] = a1; value._[A2] = a2; }
+        template <int A0, int A1> forcedinline void set(T a0, T a1) noexcept
+        {
+            assert(max(A0, A1) < size());
+            value._[A0] = a0;
+            value._[A1] = a1;
+        }
+        template <int A0, int A1, int A2> forcedinline vec3<T> get() const noexcept
+        {
+            assert(max(A0, A1, A2) < size());
+            return {value._[A0], value._[A1], value._[A2]};
+        }
+        template <int A0, int A1, int A2> forcedinline void set(T a0, T a1, T a2) noexcept
+        {
+            assert(max(A0, A1, A2) < size());
+            value._[A0] = a0;
+            value._[A1] = a1;
+            value._[A2] = a2;
+        }
 
-		/**
+        /**
 		 * Stores vec3 into arr
 		 */
-		forcedinline void store(T* arr) const noexcept { vcl.store(arr); }
-		forcedinline void store_a(T* arr) const noexcept { vcl.store_a(arr); }
+        forcedinline void store(T* arr) const noexcept
+        {
+            arr[0] = x;
+            arr[1] = y;
+            arr[2] = z;
+        }
+        forcedinline void store_a(T* arr) const noexcept
+        {
+            arr[0] = x;
+            arr[1] = y;
+            arr[2] = z;
+        }
 
-		/**
+        /**
 		 * Loads arr into vec3
 		 */
-		forcedinline void load(T* arr) const noexcept { vcl.load(arr); }
-		forcedinline void load_a(T* arr) const noexcept { vcl.load_a(arr); }
+        forcedinline void load(const T* arr) noexcept
+        {
+            x = arr[0];
+            y = arr[1];
+            z = arr[2];
+        }
+        forcedinline void load_a(const T* arr) noexcept
+        {
+            x = arr[0];
+            y = arr[1];
+            z = arr[2];
+        }
 
-		/**
-		 * Loads double arr[3] into vec4f
+        /**
+		 * Loads double arr[3] into vec3f
 		 */
-		template <typename F = float>
-		forcedinline void load(typename std::enable_if_t<std::is_same_v<T, F>, const double*> arr) noexcept { assert(((arr + 1) - arr) < size()); x = arr[0]; y = arr[1]; z = arr[2]; }
+        template <typename F = float> forcedinline void load(typename std::enable_if_t<std::is_same_v<T, F>, const double*> arr) noexcept
+        {
+            x = arr[0];
+            y = arr[1];
+            z = arr[2];
+        }
 
-		static constexpr int elementtype()
-		{
-			if constexpr (std::is_same_v<T, float>)
-				return 16;
-			else if constexpr (std::is_same_v<T, double>)
-				return 17;
-			else
-				return T::elementtype();
-		}
-	};
+        static constexpr int elementtype()
+        {
+            if constexpr (std::is_same_v<T, float>)
+                return 16;
+            else if constexpr (std::is_same_v<T, double>)
+                return 17;
+            else
+                return T::elementtype();
+        }
+    };
 #endif //GFXMATH_VEC3
 
 	/*
@@ -1257,268 +1622,729 @@ namespace dex
 	* ----------------------------------------------------------------
 	*/
 #if defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
-	template <typename T>
-	class vec4
-	{
-	public:
-		using Scalar = Scalar_t<T>;
-		struct Value { T _[4]; };
-		static constexpr int size() { return 4; }
-		union
-		{
-			struct { T x, y, z, w; };
-			struct { T r, g, b, a; };
-			Value value;
-			T array[4];
-			Vector_t<T, 4> vcl;
-			struct
-			{
-				T _dummy[3];
-				struct
-				{
-					uint32_t r10 : 10;
-					uint32_t g10 : 10;
-					uint32_t b10 : 10;
-				};
-			};
-		};
+    template <typename T> class vec4
+    {
+    public:
+        using Scalar = Scalar_t<T>;
+        struct Value
+        {
+            T _[4];
+        };
+        static constexpr int size() { return 4; }
+        union
+        {
+            struct
+            {
+                T x, y, z, w;
+            };
+            struct
+            {
+                T r, g, b, a;
+            };
+            Value value;
+            T array[4];
+            Vector_t<T, 4> vcl;
+            struct
+            {
+                T _dummy[3];
+                struct
+                {
+                    uint32_t r10 : 10;
+                    uint32_t g10 : 10;
+                    uint32_t b10 : 10;
+                };
+            };
+        };
 
-		constexpr float getR10() const { return std::bit_cast<float>(0x3f800000u | (r10 << 13)) - 1; }
-		constexpr float getG10() const { return std::bit_cast<float>(0x3f800000u | (g10 << 13)) - 1; }
-		constexpr float getB10() const { return std::bit_cast<float>(0x3f800000u | (b10 << 13)) - 1; }
-		forcedinline void setR10(float r) { r10 = (std::bit_cast<uint32_t>(r + 1) & 0x007fe000u) >> 13; }
-		forcedinline void setG10(float g) { g10 = (std::bit_cast<uint32_t>(g + 1) & 0x007fe000u) >> 13; }
-		forcedinline void setB10(float b) { b10 = (std::bit_cast<uint32_t>(b + 1) & 0x007fe000u) >> 13; }
+        constexpr float getR10() const { return std::bit_cast<float>(0x3f800000u | (r10 << 13)) - 1; }
+        constexpr float getG10() const { return std::bit_cast<float>(0x3f800000u | (g10 << 13)) - 1; }
+        constexpr float getB10() const { return std::bit_cast<float>(0x3f800000u | (b10 << 13)) - 1; }
+        forcedinline void setR10(float r) { r10 = (std::bit_cast<uint32_t>(r + 1) & 0x007fe000u) >> 13; }
+        forcedinline void setG10(float g) { g10 = (std::bit_cast<uint32_t>(g + 1) & 0x007fe000u) >> 13; }
+        forcedinline void setB10(float b) { b10 = (std::bit_cast<uint32_t>(b + 1) & 0x007fe000u) >> 13; }
 
-		constexpr vec4() : vcl(0) {}
-		constexpr vec4(T v) : vcl(v) {}
-		constexpr vec4(T x, T y, T z, T w = {}) : vcl(x, y, z, w) {}
+        constexpr vec4() : x(0), y(0), z(0), w(0) {}
+        constexpr vec4(T v) : x(v), y(v), z(v), w(v) {}
+        template <typename Q = T, typename std::enable_if_t<!std::is_arithmetic_v<Q>, bool> = true>
+        constexpr vec4(Scalar v) : x(v), y(v), z(v), w(v)
+        {
+        }
+        constexpr vec4(T x, T y, T z, T w = {}) : x(x), y(y), z(z), w(w) {}
 #if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
-		constexpr vec4(T x, T y, const vec2<T> v2) : vcl(x, y, v2.x, v2.y) {}
-		constexpr vec4(T x, const vec2<T> v2, T w) : vcl(x, v2.x, v2.y, w) {}
-		constexpr vec4(const vec2<T> v2, T z = {}, T w = {}) : vcl(v2.x, v2.y, z, w) {}
-		constexpr vec4(const vec2<T> v1, const vec2<T> v2) : vcl(v1.x, v1.y, v2.x, v2.y) {}
+        constexpr vec4(T x, T y, const vec2<T> v2) : x(x), y(y), z(v2.x), w(v2.y) {}
+        constexpr vec4(T x, const vec2<T> v2, T w) : x(x), y(v2.x), z(v2.y), w(w) {}
+        constexpr vec4(const vec2<T> v2, T z = {}, T w = {}) : x(v2.x), y(v2.y), z(z), w(w) {}
+        constexpr vec4(const vec2<T> v1, const vec2<T> v2) : x(v1.x), y(v1.y), z(v2.x), w(v2.y) {}
 #endif
 #if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
-		constexpr vec4(T x, const vec3<T> v3) : vcl(x, v3.x, v3.y, v3.z) {}
-		constexpr vec4(const vec3<T> v3, T w = {}) : vcl(v3.x, v3.y, v3.z, w) {}
+        constexpr vec4(T x, const vec3<T> v3) : x(x), y(v3.x), z(v3.y), w(v3.z) {}
+        constexpr vec4(const vec3<T> v3, T w = {}) : x(v3.x), y(v3.y), z(v3.z), w(w) {}
 #endif
-		constexpr vec4(const Vector_t<T, 4> v) : vcl(v) {}
-		constexpr vec4(const vec4& v) : vcl(v.vcl) {}
-		constexpr vec4(const Value& v) : value(v) {}
-		template <typename FP>
-		constexpr vec4(typename std::enable_if_t<!std::is_same_v<T, FP>&& std::is_floating_point_v<T>&& std::is_floating_point_v<FP>, const vec4<FP>&> v) : x(v.x), y(v.y), z(v.z), w(v.w) {}
-		constexpr vec4(const T* v) { vcl.load_a(v); }
+        template <typename Q = T, typename std::enable_if_t<std::is_arithmetic_v<Q>, bool> = true>
+        constexpr vec4(const Vector_t<Q, 4> v) : vcl(v)
+        {
+        }
+        constexpr vec4(const vec4& v) : x(v.x), y(v.y), z(v.z), w(v.w) {}
+        template <typename Q = T, typename std::enable_if_t<!std::is_arithmetic_v<Q>, bool> = true>
+        constexpr vec4(const vec4<Scalar>& v) : x(v.x), y(v.y), z(v.z), w(v.w)
+        {
+        }
+        constexpr vec4(const Value& v) : value(v) {}
+        template <typename FP,
+            typename std::enable_if_t<!std::is_same_v<T, FP> && std::is_floating_point_v<T> && std::is_floating_point_v<FP>, bool> = true>
+        constexpr vec4(const vec4<FP>& v) : x(v.x), y(v.y), z(v.z), w(v.w)
+        {
+        }
+        template <typename Q, typename std::enable_if_t<std::is_same_v<Q, T>, bool> = true>
+        constexpr vec4(const Q* v) : x(v[0]), y(v[1]), z(v[2]), w(v[3])
+        {
+        }
 
-		forcedinline vec4 withW(T ww) const noexcept { auto v = vec4(*this); v.vcl.insert(3, ww); return v; }
+        forcedinline vec4 withW(T ww) const noexcept { return {x, y, z, ww}; }
 
-		forcedinline void insert(int index, const vec4<Scalar>& value)
-		{
-			if constexpr (elements_v<T> > 1)
-			{
-				x.insert(index, value.x);
-				y.insert(index, value.y);
-				z.insert(index, value.z);
-				w.insert(index, value.w);
-			}
-			else
-				*this = value;
-		}
+        forcedinline void insert(int index, const vec4<Scalar>& value)
+        {
+            if constexpr (elements_v<T> > 1)
+            {
+                x.insert(index, value.x);
+                y.insert(index, value.y);
+                z.insert(index, value.z);
+                w.insert(index, value.w);
+            }
+            else
+                *this = value;
+        }
 
-		forcedinline vec4<Scalar> extract(int index) const
-		{
-			if constexpr (elements_v<T> > 1)
-				return { x.extract(index), y.extract(index), z.extract(index), w.extract(index) };
-			else
-				return *this;
-		}
+        forcedinline vec4<Scalar> extract(int index) const
+        {
+            if constexpr (elements_v<T> > 1)
+                return {x.extract(index), y.extract(index), z.extract(index), w.extract(index)};
+            else
+                return *this;
+        }
 
-		forcedinline vec4<Scalar> operator[](int index) const
-		{
-			return extract(index);
-		}
+        forcedinline vec4<Scalar> operator[](int index) const { return extract(index); }
 
-		template <typename Q = T, typename std::enable_if_t<!std::is_arithmetic_v<Q>, bool> = true>
-		forcedinline const auto concatenate2(const vec4 a) const noexcept
-		{
-			using CT = Vector_t<Scalar, elements_v<T> * 2>;
-			return vec4<CT>(concatenate2(x, a.x), concatenate2(y, a.y), concatenate2(z, a.z), concatenate2(w, a.w));
-		}
+        template <typename Q = T,
+            typename std::enable_if_t<!std::is_arithmetic_v<Q> && !std::is_void_v<Vector_t<Scalar_t<Q>, elements_v<Q> * 2>>, bool> = true>
+        forcedinline const auto concatenate2(const vec4 a) const noexcept
+        {
+            using CT = Vector_t<Scalar, elements_v<T> * 2>;
+            return vec4<CT>(CT(x, a.x), CT(y, a.y), CT(z, a.z), CT(w, a.w));
+        }
 
-		template <typename Q = T, typename std::enable_if_t<!std::is_arithmetic_v<Q>, bool> = true>
-		forcedinline const auto get_low() const noexcept
-		{
-			using CT = Vector_t<Scalar, elements_v<T> / 2>;
-			return vec4<CT>(x.get_low(), y.get_low(), z.get_low(), w.get_low());
-		}
+        template <typename Q = T,
+            typename std::enable_if_t<!std::is_arithmetic_v<Q> && !std::is_void_v<Vector_t<Scalar_t<Q>, elements_v<Q> / 2>>, bool> = true>
+        forcedinline const auto get_low() const noexcept
+        {
+            using CT = Vector_t<Scalar, elements_v<T> / 2>;
+            if constexpr (elements_v<T> == 2)
+            {
+                return vec4<CT>(x.extract(0), y.extract(0), z.extract(0), w.extract(0));
+            }
+            else
+            {
+                return vec4<CT>(x.get_low(), y.get_low(), z.get_low(), w.get_low());
+            }
+        }
 
-		template <typename Q = T, typename std::enable_if_t<!std::is_arithmetic_v<Q>, bool> = true>
-		forcedinline const auto get_high() const noexcept
-		{
-			using CT = Vector_t<Scalar, elements_v<T> / 2>;
-			return vec4<CT>(x.get_high(), y.get_high(), z.get_high(), w.get_high());
-		}
+        template <typename Q = T,
+            typename std::enable_if_t<!std::is_arithmetic_v<Q> && !std::is_void_v<Vector_t<Scalar_t<Q>, elements_v<Q> / 2>>, bool> = true>
+        forcedinline const auto get_high() const noexcept
+        {
+            using CT = Vector_t<Scalar, elements_v<T> / 2>;
+            if constexpr (elements_v<T> == 2)
+            {
+                return vec4<CT>(x.extract(1), y.extract(1), z.extract(1), w.extract(1));
+            }
+            else
+            {
+                return vec4<CT>(x.get_high(), y.get_high(), z.get_high(), w.get_high());
+            }
+        }
 
-		forcedinline vec4& operator+= (const vec4 v) noexcept { vcl += v.vcl; return *this; }
-		forcedinline vec4& operator-= (const vec4 v) noexcept { vcl -= v.vcl; return *this; }
-		forcedinline vec4& operator*= (const vec4 v) noexcept { vcl *= v.vcl; return *this; }
-		forcedinline vec4& operator/= (const vec4 v) noexcept { vcl /= v.vcl; return *this; }
-		forcedinline vec4 operator+ (const vec4 v) const noexcept { return vcl + v.vcl; }
-		forcedinline vec4 operator- (const vec4 v) const noexcept { return vcl - v.vcl; }
-		forcedinline vec4 operator- () const noexcept { return -vcl; }
-		forcedinline vec4 operator* (const vec4 v) const noexcept { return vcl * v.vcl; }
-		forcedinline vec4 operator/ (const vec4 v) const noexcept { return vcl / v.vcl; }
+        forcedinline vec4& operator+=(const vec4 v) noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                vcl += v.vcl;
+            }
+            else
+            {
+                x += v.x;
+                y += v.y;
+                z += v.z;
+                w += v.w;
+            }
 
-		forcedinline vec4 operator== (const vec4 v) const noexcept { return select(vcl == v.vcl, 1, 0); }
-		forcedinline vec4 operator> (const vec4 v) const noexcept { return select(vcl > v.vcl, 1, 0); }
-		forcedinline vec4 operator>= (const vec4 v) const noexcept { return select(vcl >= v.vcl, 1, 0); }
-		forcedinline vec4 operator< (const vec4 v) const noexcept { return select(vcl < v.vcl, 1, 0); }
-		forcedinline vec4 operator<= (const vec4 v) const noexcept { return select(vcl <= v.vcl, 1, 0); }
+            return *this;
+        }
+        forcedinline vec4& operator-=(const vec4 v) noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                vcl -= v.vcl;
+            }
+            else
+            {
+                x -= v.x;
+                y -= v.y;
+                z -= v.z;
+                w -= v.w;
+            }
 
-		forcedinline BoolType<T> equals(const vec4 v) const noexcept { return horizontal_and(vcl == v.vcl); }
-		forcedinline BoolType<T> greaterThan(const vec4 v) const noexcept { return horizontal_and(vcl > v.vcl); }
-		forcedinline BoolType<T> greaterThanOrEquals(const vec4 v) const noexcept { return horizontal_and(vcl >= v.vcl); }
-		forcedinline BoolType<T> lessThan(const vec4 v) const noexcept { return horizontal_and(vcl < v.vcl); }
-		forcedinline BoolType<T> lessThanOrEquals(const vec4 v) const noexcept { return horizontal_and(vcl <= v.vcl); }
+            return *this;
+        }
+        forcedinline vec4& operator*=(const vec4 v) noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                vcl *= v.vcl;
+            }
+            else
+            {
+                x *= v.x;
+                y *= v.y;
+                z *= v.z;
+                w *= v.w;
+            }
 
-		forcedinline BoolType<T> equals(const vec4 v, int mask) const noexcept { return horizontal_and(vcl == v.vcl, mask); }
-		forcedinline BoolType<T> greaterThan(const vec4 v, int mask) const noexcept { return horizontal_and(vcl > v.vcl, mask); }
-		forcedinline BoolType<T> greaterThanOrEquals(const vec4 v, int mask) const noexcept { return horizontal_and(vcl >= v.vcl, mask); }
-		forcedinline BoolType<T> lessThan(const vec4 v, int mask) const noexcept { return horizontal_and(vcl < v.vcl, mask); }
-		forcedinline BoolType<T> lessThanOrEquals(const vec4 v, int mask) const noexcept { return horizontal_and(vcl <= v.vcl, mask); }
+            return *this;
+        }
+        forcedinline vec4& operator/=(const vec4 v) noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                vcl /= v.vcl;
+            }
+            else
+            {
+                x /= v.x;
+                y /= v.y;
+                z /= v.z;
+                w /= v.w;
+            }
 
-		forcedinline T dot(const vec4 v) const noexcept { return horizontal_add(vcl * v.vcl); }
-		forcedinline vec4 cross(const vec4 v) const noexcept
-		{
-			auto a1 = permute4<1, 2, 0, V_DC>(vcl);
-			auto b1 = permute4<1, 2, 0, V_DC>(v.vcl);
-			auto a2 = permute4<2, 0, 1, V_DC>(vcl);
-			auto b2 = permute4<2, 0, 1, V_DC>(v.vcl);
-			return vec4(a1 * b2 - a2 * b1);
-		}
+            return *this;
+        }
+        forcedinline vec4 operator+(const vec4 v) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                return vcl + v.vcl;
+            }
+            else
+            {
+                return {x + v.x, y + v.y, z + v.z, w + v.w};
+            }
+        }
+        forcedinline vec4 operator-(const vec4 v) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                return vcl - v.vcl;
+            }
+            else
+            {
+                return {x - v.x, y - v.y, z - v.z, w - v.w};
+            }
+        }
+        forcedinline vec4 operator-() const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                return -vcl;
+            }
+            else
+            {
+                return {-x, -y, -z, -w};
+            }
+        }
+        forcedinline vec4 operator*(const vec4 v) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                return vcl * v.vcl;
+            }
+            else
+            {
+                return {x * v.x, y * v.y, z * v.z, w * v.w};
+            }
+        }
+        forcedinline vec4 operator/(const vec4 v) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                return vcl / v.vcl;
+            }
+            else
+            {
+                return {x / v.x, y / v.y, z / v.z, w / v.w};
+            }
+        }
 
-		forcedinline T sum() const noexcept { return horizontal_add(vcl); }
-		forcedinline T prod() const noexcept { return x * y * z * w; }
-		forcedinline T length() const noexcept { return sqrt(dot(*this)); }
-		forcedinline T lengthSquared() const noexcept { return dot(*this); }
-		forcedinline T distance(const vec4<T> v) const noexcept { return vec4<T>(vcl - v.vcl).length(); }
-		forcedinline T distanceSquared(const vec4<T> v) const noexcept { return vec4<T>(vcl - v.vcl).lengthSquared(); }
-		forcedinline vec4& normalize() noexcept { auto lr = 1.0f / (length() + Epsilon<Scalar>); vcl *= lr; return *this; }
-		forcedinline vec4 normalized() const noexcept { auto lr = 1.0f / (length() + Epsilon<Scalar>); return *this * lr; }
-		forcedinline vec4& normalizex() noexcept
-		{
-			auto len = length();
-			auto lr = 1.0f / (len == 0.0f ? Epsilon<Scalar> : len);
-			*this *= lr;
-			return *this;
-		}
-		forcedinline vec4 normalizedx() const noexcept
-		{
-			auto len = length();
-			return *this / (len == 0.0f ? Epsilon<Scalar> : len);
-		}
-		forcedinline vec4<T> lerp(const vec4<T> targetvec, T val) noexcept
-		{
-			return *this + val * (targetvec - *this);
-		}
-		forcedinline vec4<T> nlerp(const vec4<T> targetvec, T val) noexcept
-		{
-			vec4<T> vec = *this + val * (targetvec - *this);
-			vec.normalizex();
-			return vec;
-		}
-		forcedinline vec4<T> slerp(const vec4<T> targetvec, T val) noexcept
-		{
-        vec4<T> from = *this;
-        from.w = T(0);
-        T dot = clamp(from.dot(targetvec), T(-1.0), T(1.0));
-			T theta = acos(dot) * val;
-        vec4<T> relvec = (targetvec - from * dot);
-			relvec.normalizex();
-        return (from * std::cos(theta)) + (relvec * std::sin(theta));
-		}
-		forcedinline vec4 limit(float lim = 1.0f) const noexcept
-		{
-			auto m = lim / horizontal_max(vcl);
-			return select(m < lim, vcl * m, vcl);
-		}
-		forcedinline vec4 limitRGB(float lim = 1.0f) const noexcept
-		{
-			auto mr = lim / max(r, g, b);
-			return select(mr < lim, vec4{ r * mr, g * mr, b * mr, a }, *this);
-		}
-		static forcedinline vec4 fast_unit_random() noexcept
-		{
-			static int seed = (int)(fract(std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count()) * INT_MAX);
-			return vec4{ fast_rand<Vector_t<T, 4>>(&seed) - 0.5f }.normalized();
-		}
-		static forcedinline vec4 xyz_rand(int* seed, T a4 = 1.0f)
-		{
-			vec4<T> v = fast_rand<Vector_t<T, 4>>(seed) - 0.5f;
-			v.w = a4;
-			return v;
-		}
-		static forcedinline vec4 xz_rand(int* seed, T a4 = 1.0f)
-		{
-			vec4<T> v = fast_rand<Vector_t<T, 4>>(seed) - 0.5f;
-			v.y = T(0.0);
-			v.w = a4;
-			return v;
-		}
-		static forcedinline vec4 xyzmult_rand(int* seed, const vec4<T> mult)
-		{
-			vec4<T> v = vec4<T>(fast_rand<Vector_t<T, 4>>(seed) - 0.5f) * mult;
-			v.w = mult.w;
-			return v;
-		}
-		forcedinline T rgbGetT() noexcept
-		{
-			unsigned int uValue;
-			uValue = ((unsigned int)(clamp(x, T(0.0), T(0.998)) * 65535.0f + 0.5f));
-			uValue |= ((unsigned int)(clamp(y, T(0.0), T(0.998)) * 255.0f + 0.5f)) << 16;
-			uValue |= ((unsigned int)(clamp(z, T(0.0), T(0.998)) * 253.0f + 1.5f)) << 24;
+        forcedinline vec4 operator==(const vec4 v) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                return select(vcl == v.vcl, 1, 0);
+            }
+            else
+            {
+                return {
+                    select(x == v.x, T(1), T(0)), select(y == v.y, T(1), T(0)), select(z == v.z, T(1), T(0)), select(w == v.w, T(1), T(0))};
+            }
+        }
+        forcedinline vec4 operator>(const vec4 v) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                return select(vcl > v.vcl, 1, 0);
+            }
+            else
+            {
+                return {select(x > v.x, T(1), T(0)), select(y > v.y, T(1), T(0)), select(z > v.z, T(1), T(0)), select(w > v.w, T(1), T(0))};
+            }
+        }
+        forcedinline vec4 operator>=(const vec4 v) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                return select(vcl >= v.vcl, 1, 0);
+            }
+            else
+            {
+                return {
+                    select(x >= v.x, T(1), T(0)), select(y >= v.y, T(1), T(0)), select(z >= v.z, T(1), T(0)), select(w >= v.w, T(1), T(0))};
+            }
+        }
+        forcedinline vec4 operator<(const vec4 v) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                return select(vcl < v.vcl, 1, 0);
+            }
+            else
+            {
+                return {select(x < v.x, T(1), T(0)), select(y < v.y, T(1), T(0)), select(z < v.z, T(1), T(0)), select(w < v.w, T(1), T(0))};
+            }
+        }
+        forcedinline vec4 operator<=(const vec4 v) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                return select(vcl <= v.vcl, 1, 0);
+            }
+            else
+            {
+                return {
+                    select(x <= v.x, T(1), T(0)), select(y <= v.y, T(1), T(0)), select(z <= v.z, T(1), T(0)), select(w <= v.w, T(1), T(0))};
+            }
+        }
 
-			return (T)(uValue);
-		}
-		forcedinline T rgbInvGetT() noexcept
-		{
-			unsigned int uValue;
-			uValue = ((unsigned int)(clamp(T(1.0) - x, T(0.0), T(0.998)) * 65535.0f + 0.5f));
-			uValue |= ((unsigned int)(clamp(T(1.0) - y, T(0.0), T(0.998)) * 255.0f + 0.5f)) << 16;
-			uValue |= ((unsigned int)(clamp(T(1.0) - z, T(0.0), T(0.998)) * 253.0f + 1.5f)) << 24;
+        forcedinline BoolType<T> equals(const vec4 v) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                return horizontal_and(vcl == v.vcl);
+            }
+            else
+            {
+                return x == v.x && y == v.y && z == v.z && w == v.w;
+            }
+        }
+        forcedinline BoolType<T> greaterThan(const vec4 v) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                return horizontal_and(vcl > v.vcl);
+            }
+            else
+            {
+                return x > v.x && y > v.y && z > v.z && w > v.w;
+            }
+        }
+        forcedinline BoolType<T> greaterThanOrEquals(const vec4 v) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                return horizontal_and(vcl >= v.vcl);
+            }
+            else
+            {
+                return x >= v.x && y >= v.y && z >= v.z && w >= v.w;
+            }
+        }
+        forcedinline BoolType<T> lessThan(const vec4 v) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                return horizontal_and(vcl < v.vcl);
+            }
+            else
+            {
+                return x < v.x && y < v.y && z < v.z && w < v.w;
+            }
+        }
+        forcedinline BoolType<T> lessThanOrEquals(const vec4 v) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                return horizontal_and(vcl <= v.vcl);
+            }
+            else
+            {
+                return x <= v.x && y <= v.y && z <= v.z && w <= v.w;
+            }
+        }
 
-			return (T)(uValue);
-		}
-		forcedinline vec4<T> rgbSetW() noexcept
-		{
-			unsigned int uValue;
-			uValue = ((unsigned int)(clamp(x, T(0.0), T(0.998)) * 65535.0f + 0.5f));
-			uValue |= ((unsigned int)(clamp(y, T(0.0), T(0.998)) * 255.0f + 0.5f)) << 16;
-			uValue |= ((unsigned int)(clamp(z, T(0.0), T(0.998)) * 253.0f + 1.5f)) << 24;
-			w = (T)(uValue);
+        forcedinline BoolType<T> equals(const vec4 v, int mask) const noexcept
+        {
+            BoolType<T> result(true);
+            if ((mask & 1) != 0)
+            {
+                result = result && (x == v.x);
+            }
+            if ((mask & 2) != 0)
+            {
+                result = result && (y == v.y);
+            }
+            if ((mask & 4) != 0)
+            {
+                result = result && (z == v.z);
+            }
+            if ((mask & 8) != 0)
+            {
+                result = result && (w == v.w);
+            }
+            return result;
+        }
+        forcedinline BoolType<T> greaterThan(const vec4 v, int mask) const noexcept
+        {
+            BoolType<T> result(true);
+            if ((mask & 1) != 0)
+            {
+                result = result && (x > v.x);
+            }
+            if ((mask & 2) != 0)
+            {
+                result = result && (y > v.y);
+            }
+            if ((mask & 4) != 0)
+            {
+                result = result && (z > v.z);
+            }
+            if ((mask & 8) != 0)
+            {
+                result = result && (w > v.w);
+            }
+            return result;
+        }
+        forcedinline BoolType<T> greaterThanOrEquals(const vec4 v, int mask) const noexcept
+        {
+            BoolType<T> result(true);
+            if ((mask & 1) != 0)
+            {
+                result = result && (x >= v.x);
+            }
+            if ((mask & 2) != 0)
+            {
+                result = result && (y >= v.y);
+            }
+            if ((mask & 4) != 0)
+            {
+                result = result && (z >= v.z);
+            }
+            if ((mask & 8) != 0)
+            {
+                result = result && (w >= v.w);
+            }
+            return result;
+        }
+        forcedinline BoolType<T> lessThan(const vec4 v, int mask) const noexcept
+        {
+            BoolType<T> result(true);
+            if ((mask & 1) != 0)
+            {
+                result = result && (x < v.x);
+            }
+            if ((mask & 2) != 0)
+            {
+                result = result && (y < v.y);
+            }
+            if ((mask & 4) != 0)
+            {
+                result = result && (z < v.z);
+            }
+            if ((mask & 8) != 0)
+            {
+                result = result && (w < v.w);
+            }
+            return result;
+        }
+        forcedinline BoolType<T> lessThanOrEquals(const vec4 v, int mask) const noexcept
+        {
+            BoolType<T> result(true);
+            if ((mask & 1) != 0)
+            {
+                result = result && (x <= v.x);
+            }
+            if ((mask & 2) != 0)
+            {
+                result = result && (y <= v.y);
+            }
+            if ((mask & 4) != 0)
+            {
+                result = result && (z <= v.z);
+            }
+            if ((mask & 8) != 0)
+            {
+                result = result && (w <= v.w);
+            }
+            return result;
+        }
 
-			return *this;
-		}
-		forcedinline vec4<T> rgbInvSetW() noexcept
-		{
-			unsigned int uValue;
-			uValue = ((unsigned int)(clamp(T(1.0) - x, T(0.0), T(0.998)) * 65535.0f + 0.5f));
-			uValue |= ((unsigned int)(clamp(T(1.0) - y, T(0.0), T(0.998)) * 255.0f + 0.5f)) << 16;
-			uValue |= ((unsigned int)(clamp(T(1.0) - z, T(0.0), T(0.998)) * 253.0f + 1.5f)) << 24;
-			w = (T)(uValue);
+        forcedinline T dot(const vec4 v) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                return horizontal_add(vcl * v.vcl);
+            }
+            else
+            {
+                return x * v.x + y * v.y + z * v.z + w * v.w;
+            }
+        }
+        forcedinline vec4 cross(const vec4 v) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                auto a1 = permute4<1, 2, 0, V_DC>(vcl);
+                auto b1 = permute4<1, 2, 0, V_DC>(v.vcl);
+                auto a2 = permute4<2, 0, 1, V_DC>(vcl);
+                auto b2 = permute4<2, 0, 1, V_DC>(v.vcl);
+                return vec4(a1 * b2 - a2 * b1);
+            }
+            else
+            {
+                return {y * v.z - z * v.y, z * v.x - x * v.z, x * v.y - y * v.x, T(0)};
+            }
+        }
 
-			return *this;
-		}
-		forcedinline vec3<T> rgbFromW() const noexcept
-		{
-			vec3<T> rgb;
-			unsigned int uValue = (unsigned int)(w);
-			rgb.r = ((uValue) & 0xFFFF) / 65535.0f;
-			rgb.g = ((uValue >> 16) & 0xFF) / 255.0f;
-			rgb.b = (((uValue >> 24) & 0xFF) - 1.0f) / 253.0f;
-			return rgb;
-		}
+        forcedinline T sum() const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                return horizontal_add(vcl);
+            }
+            else
+            {
+                return x + y + z + w;
+            }
+        }
+        forcedinline T prod() const noexcept { return x * y * z * w; }
+        forcedinline T length() const noexcept { return sqrt(dot(*this)); }
+        forcedinline T lengthSquared() const noexcept { return dot(*this); }
+        forcedinline T distance(const vec4<T> v) const noexcept { return (*this - v).length(); }
+        forcedinline T distanceSquared(const vec4<T> v) const noexcept { return (*this - v).lengthSquared(); }
+        forcedinline vec4& normalize() noexcept
+        {
+            auto lr = 1.0f / (length() + Epsilon<Scalar>);
+            *this *= lr;
+            return *this;
+        }
+        forcedinline vec4 normalized() const noexcept
+        {
+            auto lr = 1.0f / (length() + Epsilon<Scalar>);
+            return *this * lr;
+        }
+        forcedinline vec4& normalizex() noexcept
+        {
+            auto len = length();
+            auto lr = 1.0f / select(len == T(0), T(Epsilon<Scalar>), len);
+            *this *= lr;
+            return *this;
+        }
+        forcedinline vec4 normalizedx() const noexcept
+        {
+            auto len = length();
+            return *this / select(len == T(0), T(Epsilon<Scalar>), len);
+        }
+        forcedinline vec4<T> lerp(const vec4<T> targetvec, T val) noexcept { return *this + val * (targetvec - *this); }
+        forcedinline vec4<T> nlerp(const vec4<T> targetvec, T val) noexcept
+        {
+            vec4<T> vec = *this + val * (targetvec - *this);
+            vec.normalizex();
+            return vec;
+        }
+        forcedinline vec4<T> slerp(const vec4<T> targetvec, T val) noexcept
+        {
+            if constexpr (elements_v<T> > 1)
+            {
+                vec4 result;
+                for (int index = 0; index < static_cast<int>(elements_v<T>); ++index)
+                {
+                    auto lane = extract(index);
+                    result.insert(index, lane.slerp(targetvec.extract(index), val.extract(index)));
+                }
 
+                return result;
+            }
+            else
+            {
+                vec4<T> from = *this;
+                from.w = T(0);
+                T dot = clamp(from.dot(targetvec), T(-1), T(1));
+                T theta = std::acos(dot) * val;
+                vec4<T> relative = targetvec - from * dot;
+                relative.normalizex();
+                return from * std::cos(theta) + relative * std::sin(theta);
+            }
+        }
+        forcedinline vec4 limit(float lim = 1.0f) const noexcept
+        {
+            auto maximum = max(x, y, z, w);
+            auto scale = lim / maximum;
+            return select(maximum > lim, *this * scale, *this);
+        }
+
+        forcedinline vec4 limitRGB(float lim = 1.0f) const noexcept
+        {
+            auto maximum = max(r, g, b);
+            auto scale = lim / maximum;
+            return select(maximum > lim, vec4{r * scale, g * scale, b * scale, a}, *this);
+        }
+        static forcedinline vec4 fast_unit_random() noexcept
+        {
+            static int seed =
+                (int)(fract(std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count()) * INT_MAX);
+            if constexpr (elements_v<T> == 1)
+            {
+                return vec4{fast_rand<Vector_t<T, 4>>(&seed) - 0.5f}.normalized();
+            }
+            else
+            {
+                const T randomX = fast_rand<T>(&seed) - 0.5f;
+                const T randomY = fast_rand<T>(&seed) - 0.5f;
+                const T randomZ = fast_rand<T>(&seed) - 0.5f;
+                const T randomW = fast_rand<T>(&seed) - 0.5f;
+                return vec4{randomX, randomY, randomZ, randomW}.normalized();
+            }
+        }
+
+        static forcedinline vec4 xyz_rand(int* seed, T a4 = 1.0f)
+        {
+            auto result = xyzmult_rand(seed, vec4(T(1)));
+            result.w = a4;
+            return result;
+        }
+
+        static forcedinline vec4 xz_rand(int* seed, T a4 = 1.0f)
+        {
+            auto result = xyz_rand(seed, a4);
+            result.y = T(0);
+            return result;
+        }
+
+        static forcedinline vec4 xyzmult_rand(int* seed, const vec4<T> mult)
+        {
+            vec4 result;
+            if constexpr (elements_v<T> == 1)
+            {
+                result = vec4(fast_rand<Vector_t<T, 4>>(seed) - 0.5f) * mult;
+            }
+            else
+            {
+                result.x = (fast_rand<T>(seed) - 0.5f) * mult.x;
+                result.y = (fast_rand<T>(seed) - 0.5f) * mult.y;
+                result.z = (fast_rand<T>(seed) - 0.5f) * mult.z;
+                result.w = (fast_rand<T>(seed) - 0.5f) * mult.w;
+            }
+
+            result.w = mult.w;
+            return result;
+        }
+        forcedinline T rgbGetT() noexcept
+        {
+            if constexpr (elements_v<T> > 1)
+            {
+                T result;
+                for (int index = 0; index < static_cast<int>(elements_v<T>); ++index)
+                {
+                    auto lane = extract(index);
+                    result.insert(index, lane.rgbGetT());
+                }
+
+                return result;
+            }
+            else
+            {
+                unsigned int uValue;
+                uValue = ((unsigned int)(clamp(x, T(0.0), T(0.998)) * 65535.0f + 0.5f));
+                uValue |= ((unsigned int)(clamp(y, T(0.0), T(0.998)) * 255.0f + 0.5f)) << 16;
+                uValue |= ((unsigned int)(clamp(z, T(0.0), T(0.998)) * 253.0f + 1.5f)) << 24;
+
+                return (T)(uValue);
+            }
+        }
+        forcedinline T rgbInvGetT() noexcept
+        {
+            if constexpr (elements_v<T> > 1)
+            {
+                T result;
+                for (int index = 0; index < static_cast<int>(elements_v<T>); ++index)
+                {
+                    auto lane = extract(index);
+                    result.insert(index, lane.rgbInvGetT());
+                }
+
+                return result;
+            }
+            else
+            {
+                unsigned int uValue;
+                uValue = ((unsigned int)(clamp(T(1.0) - x, T(0.0), T(0.998)) * 65535.0f + 0.5f));
+                uValue |= ((unsigned int)(clamp(T(1.0) - y, T(0.0), T(0.998)) * 255.0f + 0.5f)) << 16;
+                uValue |= ((unsigned int)(clamp(T(1.0) - z, T(0.0), T(0.998)) * 253.0f + 1.5f)) << 24;
+
+                return (T)(uValue);
+            }
+        }
+        forcedinline vec4<T> rgbSetW() noexcept
+        {
+            w = rgbGetT();
+            return *this;
+        }
+        forcedinline vec4<T> rgbInvSetW() noexcept
+        {
+            w = rgbInvGetT();
+            return *this;
+        }
+#if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
+        forcedinline vec3<T> rgbFromW() const noexcept
+        {
+            if constexpr (elements_v<T> > 1)
+            {
+                vec3<T> result;
+                for (int index = 0; index < static_cast<int>(elements_v<T>); ++index)
+                {
+                    result.insert(index, extract(index).rgbFromW());
+                }
+
+                return result;
+            }
+            else
+            {
+                vec3<T> rgb;
+                unsigned int uValue = (unsigned int)(w);
+                rgb.r = ((uValue) & 0xFFFF) / 65535.0f;
+                rgb.g = ((uValue >> 16) & 0xFF) / 255.0f;
+                rgb.b = (((uValue >> 24) & 0xFF) - 1.0f) / 253.0f;
+                return rgb;
+            }
+        }
+
+#endif
 #if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
 		forcedinline vec2<T> xx() const noexcept { return { x, x }; }           forcedinline vec2<T> aa() const noexcept { return { a, a }; }
 		forcedinline vec2<T> xy() const noexcept { return { x, y }; }           forcedinline vec2<T> ar() const noexcept { return { a, r }; }
@@ -1855,429 +2681,799 @@ namespace dex
 		forcedinline vec4<T> wwwz() const noexcept { return { w, w, w, z }; }   forcedinline vec4<T> bbbg() const noexcept { return { b, b, b, g }; }
 		forcedinline vec4<T> wwww() const noexcept { return { w, w, w, w }; }   forcedinline vec4<T> bbbb() const noexcept { return { b, b, b, b }; }
 
-		template <int A0>
-		forcedinline T get() const noexcept { assert(A0 < size()); return value._[A0]; }
-		template <int A0>
-		forcedinline void set(T a0) const noexcept { assert(A0 < size()); value._[A0] = a0; }
+        template <int A0> forcedinline T get() const noexcept
+        {
+            assert(A0 < size());
+            return value._[A0];
+        }
+        template <int A0> forcedinline void set(T a0) noexcept
+        {
+            assert(A0 < size());
+            value._[A0] = a0;
+        }
 #if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
-		template <int A0, int A1>
-		forcedinline vec2<T> get() const noexcept { assert(max(A0, A1) < size()); return { value._[A0], value._[A1] }; }
+        template <int A0, int A1> forcedinline vec2<T> get() const noexcept
+        {
+            assert(max(A0, A1) < size());
+            return {value._[A0], value._[A1]};
+        }
 #endif
-		template <int A0, int A1>
-		forcedinline void set(T a0, T a1) const noexcept { assert(max(A0, A1) < size()); value._[A0] = a0; value._[A1] = a1; }
+        template <int A0, int A1> forcedinline void set(T a0, T a1) noexcept
+        {
+            assert(max(A0, A1) < size());
+            value._[A0] = a0;
+            value._[A1] = a1;
+        }
 #if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
-		template <int A0, int A1, int A2>
-		forcedinline vec3<T> get() const noexcept { assert(max(A0, A1, A2) < size()); return { value._[A0], value._[A1], value._[A2] }; }
+        template <int A0, int A1, int A2> forcedinline vec3<T> get() const noexcept
+        {
+            assert(max(A0, A1, A2) < size());
+            return {value._[A0], value._[A1], value._[A2]};
+        }
 #endif
-		template <int A0, int A1, int A2>
-		forcedinline void set(T a0, T a1, T a2) const noexcept { assert(max(A0, A1, A2) < size()); value._[A0] = a0; value._[A1] = a1; value._[A2] = a2; }
-		template <int A0, int A1, int A2, int A3>
-		forcedinline vec4<T> get() const noexcept { assert(max(A0, A1, A2, A3) < size()); return { value._[A0], value._[A1], value._[A2], value._[A3] }; }
-		template <int A0, int A1, int A2, int A3>
-		forcedinline void set(T a0, T a1, T a2, T a3) const noexcept { assert(max(A0, A1, A2, A3) < size()); value._[A0] = a0; value._[A1] = a1; value._[A2] = a2; value._[A3] = a3; }
+        template <int A0, int A1, int A2> forcedinline void set(T a0, T a1, T a2) noexcept
+        {
+            assert(max(A0, A1, A2) < size());
+            value._[A0] = a0;
+            value._[A1] = a1;
+            value._[A2] = a2;
+        }
+        template <int A0, int A1, int A2, int A3> forcedinline vec4<T> get() const noexcept
+        {
+            assert(max(A0, A1, A2, A3) < size());
+            return {value._[A0], value._[A1], value._[A2], value._[A3]};
+        }
+        template <int A0, int A1, int A2, int A3> forcedinline void set(T a0, T a1, T a2, T a3) noexcept
+        {
+            assert(max(A0, A1, A2, A3) < size());
+            value._[A0] = a0;
+            value._[A1] = a1;
+            value._[A2] = a2;
+            value._[A3] = a3;
+        }
 
-		/**
+        /**
 		 * Stores vec4 into arr
 		 */
-		forcedinline void store(T* arr) const noexcept { vcl.store(arr); }
-		forcedinline void store_a(T* arr) const noexcept { vcl.store_a(arr); }
-		forcedinline void store_partial(int n, T* arr) const noexcept { vcl.store_partial(n, arr); }
+        forcedinline void store(T* arr) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                vcl.store(arr);
+            }
+            else
+            {
+                arr[0] = x;
+                arr[1] = y;
+                arr[2] = z;
+                arr[3] = w;
+            }
+        }
+        forcedinline void store_a(T* arr) const noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                vcl.store_a(arr);
+            }
+            else
+            {
+                arr[0] = x;
+                arr[1] = y;
+                arr[2] = z;
+                arr[3] = w;
+            }
+        }
+        forcedinline void store_partial(int n, T* arr) const noexcept
+        {
+            assert(n >= 0 && n <= size());
+            if constexpr (elements_v<T> == 1)
+            {
+                vcl.store_partial(n, arr);
+            }
+            else
+            {
+                for (int index = 0; index < n; ++index)
+                {
+                    arr[index] = array[index];
+                }
+            }
+        }
 
-		/**
+        /**
 		 * Loads arr into vec4
 		 */
-		forcedinline void load(T* arr) const noexcept { vcl.load(arr); }
-		forcedinline void load_a(T* arr) const noexcept { vcl.load_a(arr); }
-		forcedinline vec4<T>& load_partial(int n, T* arr) { vcl.load_partial(n, arr); return *this; }
+        forcedinline void load(const T* arr) noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                vcl.load(arr);
+            }
+            else
+            {
+                x = arr[0];
+                y = arr[1];
+                z = arr[2];
+                w = arr[3];
+            }
+        }
+        forcedinline void load_a(const T* arr) noexcept
+        {
+            if constexpr (elements_v<T> == 1)
+            {
+                vcl.load_a(arr);
+            }
+            else
+            {
+                x = arr[0];
+                y = arr[1];
+                z = arr[2];
+                w = arr[3];
+            }
+        }
+        forcedinline vec4<T>& load_partial(int n, const T* arr)
+        {
+            assert(n >= 0 && n <= size());
+            if constexpr (elements_v<T> == 1)
+            {
+                vcl.load_partial(n, arr);
+            }
+            else
+            {
+                for (int index = 0; index < size(); ++index)
+                {
+                    array[index] = index < n ? arr[index] : T(0);
+                }
+            }
 
-		/**
+            return *this;
+        }
+
+        /**
 		 * Loads double arr[4] into vec4f
 		 */
-		template <typename F = float>
-		forcedinline void load(typename std::enable_if_t<std::is_same_v<T, F>, const double*> arr) noexcept { assert(((arr + 1) - arr) < size()); x = arr[0]; y = arr[1]; z = arr[2]; w = arr[3]; }
+        template <typename F = float> forcedinline void load(typename std::enable_if_t<std::is_same_v<T, F>, const double*> arr) noexcept
+        {
+            x = arr[0];
+            y = arr[1];
+            z = arr[2];
+            w = arr[3];
+        }
 
-		static constexpr int elementtype()
-		{
-			if constexpr (std::is_same_v<T, float>)
-				return 16;
-			else if constexpr (std::is_same_v<T, double>)
-				return 17;
-			else
-				return T::elementtype();
-		}
-	};
+        static constexpr int elementtype()
+        {
+            if constexpr (std::is_same_v<T, float>)
+                return 16;
+            else if constexpr (std::is_same_v<T, double>)
+                return 17;
+            else
+                return T::elementtype();
+        }
+    };
 #endif //GFXMATH_VEC4
 
 #if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
-	template <typename T>
-	forcedinline vec2<T> select(const BoolType<T> s, const vec2<T>& a, const vec2<T>& b)
-	{
-		vec2<T> r;
-		r.x = select(s, a.x, b.x);
-		r.y = select(s, a.y, b.y);
-		return r;
-	}
+    template <typename T> forcedinline vec2<T> select(const BoolType<T> s, const vec2<T>& a, const vec2<T>& b)
+    {
+        vec2<T> r;
+        r.x = select(s, a.x, b.x);
+        r.y = select(s, a.y, b.y);
+        return r;
+    }
 
-	template <typename T>
-	forcedinline vec2<T> if_changeSign(const BoolType<T> s, const vec2<T>& a) { return select(s, -a, a); }
+    template <typename T> forcedinline vec2<T> if_changeSign(const BoolType<T> s, const vec2<T>& a)
+    {
+        return select(s, -a, a);
+    }
 
-	template <typename T>
-	forcedinline const vec2<T> operator+(T a, const vec2<T>& b) noexcept { return { a + b.x, a + b.y }; }
-	template <typename T>
-	forcedinline const vec2<T> operator-(T a, const vec2<T>& b) noexcept { return { a - b.x, a - b.y }; }
-	template <typename T>
-	forcedinline const vec2<T> operator*(T a, const vec2<T>& b) noexcept { return { a * b.x, a * b.y }; }
-	template <typename T>
-	forcedinline const vec2<T> operator/(T a, const vec2<T>& b) noexcept
-	{
-		auto m = T(1) / std::numeric_limits<Scalar_t<T>>::epsilon();
-		return { select(b.x != 0, a / b.x, m), select(b.y != 0, a / b.y, m) };
-	}
+    template <typename T> forcedinline const vec2<T> operator+(std::type_identity_t<T> a, const vec2<T>& b) noexcept
+    {
+        return {a + b.x, a + b.y};
+    }
+    template <typename T> forcedinline const vec2<T> operator-(std::type_identity_t<T> a, const vec2<T>& b) noexcept
+    {
+        return {a - b.x, a - b.y};
+    }
+    template <typename T> forcedinline const vec2<T> operator*(std::type_identity_t<T> a, const vec2<T>& b) noexcept
+    {
+        return {a * b.x, a * b.y};
+    }
+    template <typename T> forcedinline const vec2<T> operator/(std::type_identity_t<T> a, const vec2<T>& b) noexcept
+    {
+        auto m = T(1) / std::numeric_limits<Scalar_t<T>>::epsilon();
+        return {select(b.x != 0, a / b.x, m), select(b.y != 0, a / b.y, m)};
+    }
 
-	template <typename T>
-	forcedinline const vec2<T> min(const vec2<T>& a, const vec2<T>& b) noexcept { return { min(a.x, b.x), min(a.y, b.y) }; }
-	template <typename T>
-	forcedinline const vec2<T> min(const vec2<T>& a, T b) noexcept { return { min(a.x, b), min(a.y, b) }; }
-	template <typename T>
-	forcedinline const T horizontal_min(const vec2<T> a) noexcept { return min(a.x, a.y); }
+    template <typename T> forcedinline const vec2<T> min(const vec2<T>& a, const vec2<T>& b) noexcept
+    {
+        return {min(a.x, b.x), min(a.y, b.y)};
+    }
+    template <typename T> forcedinline const vec2<T> min(const vec2<T>& a, T b) noexcept
+    {
+        return {min(a.x, b), min(a.y, b)};
+    }
+    template <typename T> forcedinline const T horizontal_min(const vec2<T> a) noexcept
+    {
+        return min(a.x, a.y);
+    }
 
-	template <typename T>
-	forcedinline const vec2<T> max(const vec2<T>& a, const vec2<T>& b) noexcept { return { max(a.x, b.x), max(a.y, b.y) }; }
-	template <typename T>
-	forcedinline const vec2<T> max(const vec2<T>& a, T b) noexcept { return { max(a.x, b), max(a.y, b) }; }
-	template <typename T>
-	forcedinline const T horizontal_max(const vec2<T>& a) noexcept { return max(a.x, a.y); }
+    template <typename T> forcedinline const vec2<T> max(const vec2<T>& a, const vec2<T>& b) noexcept
+    {
+        return {max(a.x, b.x), max(a.y, b.y)};
+    }
+    template <typename T> forcedinline const vec2<T> max(const vec2<T>& a, T b) noexcept
+    {
+        return {max(a.x, b), max(a.y, b)};
+    }
+    template <typename T> forcedinline const T horizontal_max(const vec2<T>& a) noexcept
+    {
+        return max(a.x, a.y);
+    }
 
-	template <typename T>
-	forcedinline const T add(const vec2<T>& a) noexcept { return a.x + a.y; }
+    template <typename T> forcedinline const T add(const vec2<T>& a) noexcept
+    {
+        return a.x + a.y;
+    }
 
-	template <typename T>
-	forcedinline const vec2<T> max1(const vec2<T>& a) noexcept
-	{
-		return { T(a.x >= a.y), T(a.y < a.x) };
-	}
+    template <typename T> forcedinline const vec2<T> max1(const vec2<T>& a) noexcept
+    {
+        return {select(a.x >= a.y, T(1), T(0)), select(a.y > a.x, T(1), T(0))};
+    }
 #endif //GFXMATH_VEC2
 
 #if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
-	template <typename T>
-	forcedinline vec3<T> select(const BoolType<T> s, const vec3<T>& a, const vec3<T>& b)
-	{
-		vec3<T> r;
-		r.x = select(s, a.x, b.x);
-		r.y = select(s, a.y, b.y);
-		r.z = select(s, a.z, b.z);
-		return r;
-	}
+    template <typename T> forcedinline vec3<T> select(const BoolType<T> s, const vec3<T>& a, const vec3<T>& b)
+    {
+        vec3<T> r;
+        r.x = select(s, a.x, b.x);
+        r.y = select(s, a.y, b.y);
+        r.z = select(s, a.z, b.z);
+        return r;
+    }
 
-	template <typename T>
-	forcedinline vec3<T> if_changeSign(const BoolType<T> s, const vec3<T>& a) { return select(s, -a, a); }
+    template <typename T> forcedinline vec3<T> if_changeSign(const BoolType<T> s, const vec3<T>& a)
+    {
+        return select(s, -a, a);
+    }
 
-	template <typename T>
-	forcedinline const vec3<T> operator+(T a, const vec3<T>& b) noexcept { return { a + b.x, a + b.y, a + b.z }; }
-	template <typename T>
-	forcedinline const vec3<T> operator-(T a, const vec3<T>& b) noexcept { return { a - b.x, a - b.y, a - b.z }; }
-	template <typename T>
-	forcedinline const vec3<T> operator*(T a, const vec3<T>& b) noexcept { return { a * b.x, a * b.y, a * b.z }; }
-	template <typename T>
-	forcedinline const vec3<T> operator/(T a, const vec3<T>& b) noexcept
-	{
-		auto m = T(1) / std::numeric_limits<Scalar_t<T>>::epsilon();
-		return { select(b.x != 0, a / b.x, m), select(b.y != 0, a / b.y, m), select(b.z != 0, a / b.z, m) };
-	}
+    template <typename T> forcedinline const vec3<T> operator+(std::type_identity_t<T> a, const vec3<T>& b) noexcept
+    {
+        return {a + b.x, a + b.y, a + b.z};
+    }
+    template <typename T> forcedinline const vec3<T> operator-(std::type_identity_t<T> a, const vec3<T>& b) noexcept
+    {
+        return {a - b.x, a - b.y, a - b.z};
+    }
+    template <typename T> forcedinline const vec3<T> operator*(std::type_identity_t<T> a, const vec3<T>& b) noexcept
+    {
+        return {a * b.x, a * b.y, a * b.z};
+    }
+    template <typename T> forcedinline const vec3<T> operator/(std::type_identity_t<T> a, const vec3<T>& b) noexcept
+    {
+        auto m = T(1) / std::numeric_limits<Scalar_t<T>>::epsilon();
+        return {select(b.x != 0, a / b.x, m), select(b.y != 0, a / b.y, m), select(b.z != 0, a / b.z, m)};
+    }
 
-	template <typename T>
-	forcedinline const vec3<T> min(const vec3<T>& a, const vec3<T>& b) noexcept { return { min(a.x, b.x), min(a.y, b.y), min(a.z, b.z) }; }
-	template <typename T>
-	forcedinline const vec3<T> min(const vec3<T>& a, T b) noexcept { return { min(a.x, b), min(a.y, b), min(a.z, b) }; }
-	template <typename T>
-	forcedinline const T horizontal_min(const vec3<T>& a) noexcept { return min(a.x, a.y, a.z); }
+    template <typename T> forcedinline const vec3<T> min(const vec3<T>& a, const vec3<T>& b) noexcept
+    {
+        return {min(a.x, b.x), min(a.y, b.y), min(a.z, b.z)};
+    }
+    template <typename T> forcedinline const vec3<T> min(const vec3<T>& a, T b) noexcept
+    {
+        return {min(a.x, b), min(a.y, b), min(a.z, b)};
+    }
+    template <typename T> forcedinline const T horizontal_min(const vec3<T>& a) noexcept
+    {
+        return min(a.x, a.y, a.z);
+    }
 
-	template <typename T>
-	forcedinline const vec3<T> max(const vec3<T>& a, const vec3<T>& b) noexcept { return { max(a.x, b.x), max(a.y, b.y), max(a.z, b.z) }; }
-	template <typename T>
-	forcedinline const vec3<T> max(const vec3<T>& a, T b) noexcept { return { max(a.x, b), max(a.y, b), max(a.z, b) }; }
-	template <typename T>
-	forcedinline const T horizontal_max(const vec3<T>& a) noexcept { return max(a.x, a.y, a.z); }
+    template <typename T> forcedinline const vec3<T> max(const vec3<T>& a, const vec3<T>& b) noexcept
+    {
+        return {max(a.x, b.x), max(a.y, b.y), max(a.z, b.z)};
+    }
+    template <typename T> forcedinline const vec3<T> max(const vec3<T>& a, T b) noexcept
+    {
+        return {max(a.x, b), max(a.y, b), max(a.z, b)};
+    }
+    template <typename T> forcedinline const T horizontal_max(const vec3<T>& a) noexcept
+    {
+        return max(a.x, a.y, a.z);
+    }
 
-	template <typename T>
-	forcedinline const T add(const vec3<T>& a) noexcept { return a.x + a.y + a.z; }
+    template <typename T> forcedinline const T add(const vec3<T>& a) noexcept
+    {
+        return a.x + a.y + a.z;
+    }
 
-	template <typename T>
-	forcedinline const vec3<T> max1(const vec3<T>& a) noexcept
-	{
-		auto m = horizontal_max(a);
-		auto bx = a.x == m, by = a.y == m, bz = a.z == m;
-		return { T(bx), T(by && !bx), T(bz && !(bx || by)) };
-	}
+    template <typename T> forcedinline const vec3<T> max1(const vec3<T>& a) noexcept
+    {
+        auto m = horizontal_max(a);
+        auto bx = a.x == m, by = a.y == m, bz = a.z == m;
+        return {select(bx, T(1), T(0)), select(by && !bx, T(1), T(0)), select(bz && !(bx || by), T(1), T(0))};
+    }
 #endif //GFXMATH_VEC3
 
 #if defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
-	template <typename T>
-	forcedinline vec4<T> select(const BoolType<T> s, const vec4<T>& a, const vec4<T>& b)
-	{
-		vec4<T> r;
-		r.x = select(s, a.x, b.x);
-		r.y = select(s, a.y, b.y);
-		r.z = select(s, a.z, b.z);
-		r.w = select(s, a.w, b.w);
-		return r;
-	}
+    template <typename T> forcedinline vec4<T> select(const BoolType<T> s, const vec4<T>& a, const vec4<T>& b)
+    {
+        vec4<T> r;
+        r.x = select(s, a.x, b.x);
+        r.y = select(s, a.y, b.y);
+        r.z = select(s, a.z, b.z);
+        r.w = select(s, a.w, b.w);
+        return r;
+    }
 
-	template <typename T>
-	forcedinline vec4<T> if_changeSign(const BoolType<T> s, const vec4<T>& a) { return select(s, -a, a); }
+    template <typename T> forcedinline vec4<T> if_changeSign(const BoolType<T> s, const vec4<T>& a)
+    {
+        return select(s, -a, a);
+    }
 
-	template <typename T>
-	forcedinline const vec4<T> operator+(T a, const vec4<T>& b) noexcept { return { a + b.x, a + b.y, a + b.z, a + b.w }; }
-	template <typename T>
-	forcedinline const vec4<T> operator-(T a, const vec4<T>& b) noexcept { return { a - b.x, a - b.y, a - b.z, a - b.w }; }
-	template <typename T>
-	forcedinline const vec4<T> operator*(T a, const vec4<T>& b) noexcept { return { a * b.x, a * b.y, a * b.z, a * b.w }; }
-	template <typename T>
-	forcedinline const vec4<T> operator/(T a, const vec4<T>& b) noexcept
-	{
-		auto m = T(1) / std::numeric_limits<Scalar_t<T>>::epsilon();
-		return { select(b.x != 0, a / b.x, m), select(b.y != 0, a / b.y, m), select(b.z != 0, a / b.z, m), select(b.w != 0, a / b.w, m) };
-	}
+    template <typename T> forcedinline const vec4<T> operator+(std::type_identity_t<T> a, const vec4<T>& b) noexcept
+    {
+        return {a + b.x, a + b.y, a + b.z, a + b.w};
+    }
+    template <typename T> forcedinline const vec4<T> operator-(std::type_identity_t<T> a, const vec4<T>& b) noexcept
+    {
+        return {a - b.x, a - b.y, a - b.z, a - b.w};
+    }
+    template <typename T> forcedinline const vec4<T> operator*(std::type_identity_t<T> a, const vec4<T>& b) noexcept
+    {
+        return {a * b.x, a * b.y, a * b.z, a * b.w};
+    }
+    template <typename T> forcedinline const vec4<T> operator/(std::type_identity_t<T> a, const vec4<T>& b) noexcept
+    {
+        auto m = T(1) / std::numeric_limits<Scalar_t<T>>::epsilon();
+        return {select(b.x != 0, a / b.x, m), select(b.y != 0, a / b.y, m), select(b.z != 0, a / b.z, m), select(b.w != 0, a / b.w, m)};
+    }
 
-	template <typename T>
-	forcedinline const vec4<T> min(const vec4<T>& a, const vec4<T>& b) noexcept { return { min(a.vcl, b.vcl) }; }
-	template <typename T>
-	forcedinline const vec4<T> min(const vec4<T>& a, T b) noexcept { return { min(a.vcl, b) }; }
-	template <typename T>
-	forcedinline const T horizontal_min(const vec4<T>& a) noexcept { return horizontal_min(a.vcl); }
-	template <typename T>
-	forcedinline const T horizontal_min3(const vec4<T>& a) noexcept { return horizontal_min(a.withW(FLT_MAX).vcl); }
+    template <typename T> forcedinline const vec4<T> min(const vec4<T>& a, const vec4<T>& b) noexcept
+    {
+        return {min(a.x, b.x), min(a.y, b.y), min(a.z, b.z), min(a.w, b.w)};
+    }
+    template <typename T> forcedinline const vec4<T> min(const vec4<T>& a, T b) noexcept
+    {
+        return {min(a.x, b), min(a.y, b), min(a.z, b), min(a.w, b)};
+    }
+    template <typename T> forcedinline const T horizontal_min(const vec4<T>& a) noexcept
+    {
+        return min(a.x, a.y, a.z, a.w);
+    }
+    template <typename T> forcedinline const T horizontal_min3(const vec4<T>& a) noexcept
+    {
+        return min(a.x, a.y, a.z);
+    }
 
-	template <typename T>
-	forcedinline const vec4<T> max(const vec4<T>& a, const vec4<T>& b) noexcept { return { max(a.vcl, b.vcl) }; }
-	template <typename T>
-	forcedinline const vec4<T> max(const vec4<T>& a, T b) noexcept { return { max(a.vcl, b) }; }
-	template <typename T>
-	forcedinline const T horizontal_max(const vec4<T>& a) noexcept { return horizontal_max(a.vcl); }
-	template <typename T>
-	forcedinline const T horizontal_max3(const vec4<T>& a) noexcept { return horizontal_max(a.withW(-FLT_MAX).vcl); }
+    template <typename T> forcedinline const vec4<T> max(const vec4<T>& a, const vec4<T>& b) noexcept
+    {
+        return {max(a.x, b.x), max(a.y, b.y), max(a.z, b.z), max(a.w, b.w)};
+    }
+    template <typename T> forcedinline const vec4<T> max(const vec4<T>& a, T b) noexcept
+    {
+        return {max(a.x, b), max(a.y, b), max(a.z, b), max(a.w, b)};
+    }
+    template <typename T> forcedinline const T horizontal_max(const vec4<T>& a) noexcept
+    {
+        return max(a.x, a.y, a.z, a.w);
+    }
+    template <typename T> forcedinline const T horizontal_max3(const vec4<T>& a) noexcept
+    {
+        return max(a.x, a.y, a.z);
+    }
 
-	template <typename T>
-	forcedinline const T horizontal_add(const vec4<T>& a) noexcept { return horizontal_add(a.vcl); }
-	template <typename T>
-	forcedinline const T horizontal_add3(const vec4<T>& a) noexcept { return horizontal_add(a.withW(0).vcl); }
+    template <typename T> forcedinline const T horizontal_add(const vec4<T>& a) noexcept
+    {
+        return a.x + a.y + a.z + a.w;
+    }
+    template <typename T> forcedinline const T horizontal_add3(const vec4<T>& a) noexcept
+    {
+        return a.x + a.y + a.z;
+    }
 
-	template <typename T>
-	forcedinline const vec4<T> max1(const vec4<T>& a) noexcept
-	{
-		auto m = horizontal_max(a);
-		auto bx = a.x == m, by = a.y == m, bz = a.z == m, bw = a.w == m;
-		return { T(bx), T(by && !bx), T(bz && !(bx || by)), T(bw && !(bx || by || bz)) };
-	}
+    template <typename T> forcedinline const vec4<T> max1(const vec4<T>& a) noexcept
+    {
+        auto m = horizontal_max(a);
+        auto bx = a.x == m, by = a.y == m, bz = a.z == m, bw = a.w == m;
+        return {select(bx, T(1), T(0)), select(by && !bx, T(1), T(0)), select(bz && !(bx || by), T(1), T(0)),
+            select(bw && !(bx || by || bz), T(1), T(0))};
+    }
 #endif //GFXMATH_VEC4
 
 #if defined(GFXMATH_ARGB) || defined(GFXMATH_ALL)
-	template <typename T>
-	forcedinline ARGB<T> select(const BoolType<Vector_t<T, 4>> s, const ARGB<T>& a, const ARGB<T>& b)
-	{
-		return select(s, a.vcl, b.vcl);
-	}
+    template <typename T> forcedinline ARGB<T> select(const BoolType<Vector_t<T, 4>> s, const ARGB<T>& a, const ARGB<T>& b)
+    {
+        return select(s, a.vcl, b.vcl);
+    }
 
-	template <typename T>
-	forcedinline vec4<T> if_changeSign(const BoolType<T> s, const ARGB<T>& a) { return select(s, -a, a); }
+    template <typename T> forcedinline ARGB<T> if_changeSign(const BoolType<T> s, const ARGB<T>& a)
+    {
+        return s ? -a : a;
+    }
 
-	template <typename T>
-	forcedinline const ARGB<T> operator+(T a, const ARGB<T>& b) noexcept { return a + b.vcl; }
-	template <typename T>
-	forcedinline const ARGB<T> operator-(T a, const ARGB<T>& b) noexcept { return a - b.vcl; }
-	template <typename T>
-	forcedinline const ARGB<T> operator*(T a, const ARGB<T>& b) noexcept { return a * b.vcl; }
-	template <typename T>
-	forcedinline const ARGB<T> operator/(T a, const ARGB<T>& b) noexcept
-	{
-		auto m = T(1) / std::numeric_limits<Scalar_t<T>>::epsilon();
-		return select(b.vcl != 0, a / b.vcl, m);
-	}
+    template <typename T> forcedinline const ARGB<T> operator+(T a, const ARGB<T>& b) noexcept
+    {
+        return a + b.vcl;
+    }
+    template <typename T> forcedinline const ARGB<T> operator-(T a, const ARGB<T>& b) noexcept
+    {
+        return a - b.vcl;
+    }
+    template <typename T> forcedinline const ARGB<T> operator*(T a, const ARGB<T>& b) noexcept
+    {
+        return a * b.vcl;
+    }
+    template <typename T> forcedinline const ARGB<T> operator/(T a, const ARGB<T>& b) noexcept
+    {
+        auto m = T(1) / std::numeric_limits<Scalar_t<T>>::epsilon();
+        return select(b.vcl != 0, a / b.vcl, m);
+    }
 
-	template <typename T>
-	forcedinline const ARGB<T> min(const ARGB<T>& a, const ARGB<T>& b) noexcept { return min(a.vcl, b.vcl); }
-	template <typename T>
-	forcedinline const ARGB<T> min(const ARGB<T>& a, T b) noexcept { return min(a.vcl, b); }
-	template <typename T>
-	forcedinline const T horizontal_min(const ARGB<T>& a) noexcept { return horizontal_min(a.vcl); }
+    template <typename T> forcedinline const ARGB<T> min(const ARGB<T>& a, const ARGB<T>& b) noexcept
+    {
+        return min(a.vcl, b.vcl);
+    }
+    template <typename T> forcedinline const ARGB<T> min(const ARGB<T>& a, T b) noexcept
+    {
+        return min(a.vcl, b);
+    }
+    template <typename T> forcedinline const T horizontal_min(const ARGB<T>& a) noexcept
+    {
+        return horizontal_min(a.vcl);
+    }
 
-	template <typename T>
-	forcedinline const ARGB<T> max(const ARGB<T>& a, const ARGB<T>& b) noexcept { return max(a.vcl, b.vcl); }
-	template <typename T>
-	forcedinline const ARGB<T> max(const ARGB<T>& a, T b) noexcept { return max(a.vcl, b); }
-	template <typename T>
-	forcedinline const T horizontal_max(const ARGB<T>& a) noexcept { return horizontal_max(a.vcl); }
+    template <typename T> forcedinline const ARGB<T> max(const ARGB<T>& a, const ARGB<T>& b) noexcept
+    {
+        return max(a.vcl, b.vcl);
+    }
+    template <typename T> forcedinline const ARGB<T> max(const ARGB<T>& a, T b) noexcept
+    {
+        return max(a.vcl, b);
+    }
+    template <typename T> forcedinline const T horizontal_max(const ARGB<T>& a) noexcept
+    {
+        return horizontal_max(a.vcl);
+    }
 #endif //GFXMATH_ARGB
 
-	template <typename T, std::enable_if_t<std::is_arithmetic_v<T>>>
-	forcedinline const T add(const T a) noexcept { return a; }
+    template <typename T, std::enable_if_t<std::is_arithmetic_v<T>, int> = 0> forcedinline const T add(const T a) noexcept
+    {
+        return a;
+    }
 
-	template <typename T>
-	forcedinline const T sign(const T& v) noexcept { return select(v < 0, -1, 1); }
+    template <typename T> forcedinline const T sign(const T& v) noexcept
+    {
+        return select(v < 0, -1, 1);
+    }
 
 #if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
-	template <typename T>
-	forcedinline const vec2<T> abs(const vec2<T>& a) noexcept { return { std::abs(a.x), std::abs(a.y) }; }
-	template <typename T>
-	forcedinline const vec2<T> exp(const vec2<T>& a) noexcept { return { std::exp(a.x), std::exp(a.y) }; }
-	template <typename T>
-	forcedinline const vec2<T> sqrt(const vec2<T>& a) noexcept { return { std::sqrt(a.x), std::sqrt(a.y) }; }
-	template <typename T>
-	forcedinline const vec2<T> sin(const vec2<T>& a) noexcept { return { std::sin(a.x), std::sin(a.y) }; }
-	template <typename T>
-	forcedinline const vec2<T> cos(const vec2<T>& a) noexcept { return { std::cos(a.x), std::cos(a.y) }; }
-	template <typename T>
-	forcedinline const vec2<T> approx_sqrt(const vec2<T>& a) noexcept { return { approx_sqrt(a.x), approx_sqrt(a.y) }; }
+    template <typename T> forcedinline const vec2<T> abs(const vec2<T>& a) noexcept
+    {
+        using std::abs;
+        return {abs(a.x), abs(a.y)};
+    }
+    template <typename T> forcedinline const vec2<T> exp(const vec2<T>& a) noexcept
+    {
+        using std::exp;
+        return {exp(a.x), exp(a.y)};
+    }
+    template <typename T> forcedinline const vec2<T> sqrt(const vec2<T>& a) noexcept
+    {
+        using std::sqrt;
+        return {sqrt(a.x), sqrt(a.y)};
+    }
+    template <typename T> forcedinline const vec2<T> sin(const vec2<T>& a) noexcept
+    {
+        using std::sin;
+        return {sin(a.x), sin(a.y)};
+    }
+    template <typename T> forcedinline const vec2<T> cos(const vec2<T>& a) noexcept
+    {
+        using std::cos;
+        return {cos(a.x), cos(a.y)};
+    }
+    template <typename T> forcedinline const vec2<T> approx_sqrt(const vec2<T>& a) noexcept
+    {
+        return {approx_sqrt(a.x), approx_sqrt(a.y)};
+    }
 
-	template <typename T>
-	forcedinline const vec2<T> sign(const vec2<T>& a) noexcept { return { select(a.x < 0, -1, 1), select(a.y < 0, -1, 1) }; }
-	template <>
-	forcedinline const vec2<float> sign(const vec2<float>& a) noexcept { return vec2<float>{ sign(a.x), sign(a.y) }; }
-	template <>
-	forcedinline const vec2<double> sign(const vec2<double>& a) noexcept { return vec2<double>{ sign(a.x), sign(a.y) }; }
+    template <typename T> forcedinline const vec2<T> sign(const vec2<T>& a) noexcept
+    {
+        return {select(a.x < 0, -1, 1), select(a.y < 0, -1, 1)};
+    }
+    template <> forcedinline const vec2<float> sign(const vec2<float>& a) noexcept
+    {
+        return vec2<float>{sign(a.x), sign(a.y)};
+    }
+    template <> forcedinline const vec2<double> sign(const vec2<double>& a) noexcept
+    {
+        return vec2<double>{sign(a.x), sign(a.y)};
+    }
 
-	template <typename T>
-	forcedinline const vec2<T> step(const vec2<T>& a, const vec2<T>& b) noexcept { return { T(select(b.x < a.x, 0, 1)), T(select(b.y < a.y, 0, 1)) }; }
-	template <>
-	forcedinline const vec2<float> step(const vec2<float>& a, const vec2<float>& b) noexcept { return { float(b.x >= a.x), float(b.y >= a.y) }; }
-	template <>
-	forcedinline const vec2<double> step(const vec2<double>& a, const vec2<double>& b) noexcept { return { double(b.x >= a.x), double(b.y >= a.y) }; }
+    template <typename T> forcedinline const vec2<T> step(const vec2<T>& a, const vec2<T>& b) noexcept
+    {
+        return {T(select(b.x < a.x, 0, 1)), T(select(b.y < a.y, 0, 1))};
+    }
+    template <> forcedinline const vec2<float> step(const vec2<float>& a, const vec2<float>& b) noexcept
+    {
+        return {float(b.x >= a.x), float(b.y >= a.y)};
+    }
+    template <> forcedinline const vec2<double> step(const vec2<double>& a, const vec2<double>& b) noexcept
+    {
+        return {double(b.x >= a.x), double(b.y >= a.y)};
+    }
 
-	template <typename T>
-	forcedinline const vec2<T> pow(const vec2<T>& a, const vec2<T>& b) noexcept { return { std::pow(a.x, b.x), std::pow(a.y, b.y) }; }
-	template <typename T>
-	forcedinline const vec2<T> pow(const vec2<T>& a, T b) noexcept { return { std::pow(a.x, b), std::pow(a.y, b) }; }
+    template <typename T> forcedinline const vec2<T> pow(const vec2<T>& a, const vec2<T>& b) noexcept
+    {
+        using std::pow;
+        return {pow(a.x, b.x), pow(a.y, b.y)};
+    }
+    template <typename T> forcedinline const vec2<T> pow(const vec2<T>& a, T b) noexcept
+    {
+        using std::pow;
+        return {pow(a.x, b), pow(a.y, b)};
+    }
 
-	template <typename T>
-	forcedinline const vec2<T> trunc(const vec2<T>& a) noexcept { return { std::trunc(a.x), std::trunc(a.y) }; }
-	template <typename T>
-	forcedinline const vec2<T> floor(const vec2<T>& a) noexcept { return { std::floor(a.x), std::floor(a.y) }; }
-	template <typename T>
-	forcedinline const vec2<T> ceil(const vec2<T>& a) noexcept { return { std::ceil(a.x), std::ceil(a.y) }; }
+    template <typename T> forcedinline const vec2<T> trunc(const vec2<T>& a) noexcept
+    {
+        return {dex::trunc(a.x), dex::trunc(a.y)};
+    }
+    template <typename T> forcedinline const vec2<T> floor(const vec2<T>& a) noexcept
+    {
+        using std::floor;
+        return {floor(a.x), floor(a.y)};
+    }
+    template <typename T> forcedinline const vec2<T> ceil(const vec2<T>& a) noexcept
+    {
+        using std::ceil;
+        return {ceil(a.x), ceil(a.y)};
+    }
 #endif //GFXMATH_VEC2
 
 #if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
-	template <typename T>
-	forcedinline const vec3<T> abs(const vec3<T>& a) noexcept { return { std::abs(a.x), std::abs(a.y), std::abs(a.z) }; }
-	template <typename T>
-	forcedinline const vec3<T> exp(const vec3<T>& a) noexcept { return { std::exp(a.x), std::exp(a.y), std::exp(a.z) }; }
-	template <typename T>
-	forcedinline const vec3<T> sqrt(const vec3<T>& a) noexcept { return { std::sqrt(a.x), std::sqrt(a.y), std::sqrt(a.z) }; }
-	template <typename T>
-	forcedinline const vec3<T> sin(const vec3<T>& a) noexcept { return { std::sin(a.x), std::sin(a.y), std::sin(a.z) }; }
-	template <typename T>
-	forcedinline const vec3<T> cos(const vec3<T>& a) noexcept { return { std::cos(a.x), std::cos(a.y), std::cos(a.z) }; }
-	template <typename T>
-	forcedinline const vec3<T> approx_sqrt(const vec3<T>& a) noexcept { return { approx_sqrt(a.x), approx_sqrt(a.y), approx_sqrt(a.z) }; }
+    template <typename T> forcedinline const vec3<T> abs(const vec3<T>& a) noexcept
+    {
+        using std::abs;
+        return {abs(a.x), abs(a.y), abs(a.z)};
+    }
+    template <typename T> forcedinline const vec3<T> exp(const vec3<T>& a) noexcept
+    {
+        using std::exp;
+        return {exp(a.x), exp(a.y), exp(a.z)};
+    }
+    template <typename T> forcedinline const vec3<T> sqrt(const vec3<T>& a) noexcept
+    {
+        using std::sqrt;
+        return {sqrt(a.x), sqrt(a.y), sqrt(a.z)};
+    }
+    template <typename T> forcedinline const vec3<T> sin(const vec3<T>& a) noexcept
+    {
+        using std::sin;
+        return {sin(a.x), sin(a.y), sin(a.z)};
+    }
+    template <typename T> forcedinline const vec3<T> cos(const vec3<T>& a) noexcept
+    {
+        using std::cos;
+        return {cos(a.x), cos(a.y), cos(a.z)};
+    }
+    template <typename T> forcedinline const vec3<T> approx_sqrt(const vec3<T>& a) noexcept
+    {
+        return {approx_sqrt(a.x), approx_sqrt(a.y), approx_sqrt(a.z)};
+    }
 
-	template <typename T>
-	forcedinline const vec3<T> sign(const vec3<T>& a) noexcept { return { select(a.x < 0, -1, 1), select(a.y < 0, -1, 1), select(a.z < 0, -1, 1) }; }
-	template <>
-	forcedinline const vec3<float> sign(const vec3<float>& a) noexcept { return vec3<float>{ sign(a.x), sign(a.y), sign(a.z) }; }
-	template <>
-	forcedinline const vec3<double> sign(const vec3<double>& a) noexcept { return vec3<double>{ sign(a.x), sign(a.y), sign(a.z) }; }
+    template <typename T> forcedinline const vec3<T> sign(const vec3<T>& a) noexcept
+    {
+        return {select(a.x < 0, -1, 1), select(a.y < 0, -1, 1), select(a.z < 0, -1, 1)};
+    }
+    template <> forcedinline const vec3<float> sign(const vec3<float>& a) noexcept
+    {
+        return vec3<float>{sign(a.x), sign(a.y), sign(a.z)};
+    }
+    template <> forcedinline const vec3<double> sign(const vec3<double>& a) noexcept
+    {
+        return vec3<double>{sign(a.x), sign(a.y), sign(a.z)};
+    }
 
-	template <typename T>
-	forcedinline const vec3<T> step(const vec3<T>& a, const vec3<T>& b) noexcept { return { T(select(b.x < a.x, 0, 1)), T(select(b.y < a.y, 0, 1)), T(select(b.z < a.z, 0, 1)) }; }
-	template <>
-	forcedinline const vec3<float> step(const vec3<float>& a, const vec3<float>& b) noexcept { return { float(b.x >= a.x), float(b.y >= a.y), float(b.z >= a.z) }; }
-	template <>
-	forcedinline const vec3<double> step(const vec3<double>& a, const vec3<double>& b) noexcept { return { double(b.x >= a.x), double(b.y >= a.y), double(b.z >= a.z) }; }
+    template <typename T> forcedinline const vec3<T> step(const vec3<T>& a, const vec3<T>& b) noexcept
+    {
+        return {T(select(b.x < a.x, 0, 1)), T(select(b.y < a.y, 0, 1)), T(select(b.z < a.z, 0, 1))};
+    }
+    template <> forcedinline const vec3<float> step(const vec3<float>& a, const vec3<float>& b) noexcept
+    {
+        return {float(b.x >= a.x), float(b.y >= a.y), float(b.z >= a.z)};
+    }
+    template <> forcedinline const vec3<double> step(const vec3<double>& a, const vec3<double>& b) noexcept
+    {
+        return {double(b.x >= a.x), double(b.y >= a.y), double(b.z >= a.z)};
+    }
 
-	template <typename T>
-	forcedinline const vec3<T> pow(const vec3<T>& a, const vec3<T>& b) noexcept { return { std::pow(a.x, b.x), std::pow(a.y, b.y), std::pow(a.z, b.z) }; }
-	template <typename T>
-	forcedinline const vec3<T> pow(const vec3<T>& a, T b) noexcept { return { std::pow(a.x, b), std::pow(a.y, b), std::pow(a.z, b) }; }
+    template <typename T> forcedinline const vec3<T> pow(const vec3<T>& a, const vec3<T>& b) noexcept
+    {
+        using std::pow;
+        return {pow(a.x, b.x), pow(a.y, b.y), pow(a.z, b.z)};
+    }
+    template <typename T> forcedinline const vec3<T> pow(const vec3<T>& a, T b) noexcept
+    {
+        using std::pow;
+        return {pow(a.x, b), pow(a.y, b), pow(a.z, b)};
+    }
 
-	template <typename T>
-	forcedinline const vec3<T> trunc(const vec3<T>& a) noexcept { return { std::trunc(a.x), std::trunc(a.y), std::trunc(a.z) }; }
-	template <typename T>
-	forcedinline const vec3<T> floor(const vec3<T>& a) noexcept { return { std::floor(a.x), std::floor(a.y), std::floor(a.z) }; }
-	template <typename T>
-	forcedinline const vec3<T> ceil(const vec3<T>& a) noexcept { return { std::ceil(a.x), std::ceil(a.y), std::ceil(a.z) }; }
+    template <typename T> forcedinline const vec3<T> trunc(const vec3<T>& a) noexcept
+    {
+        return {dex::trunc(a.x), dex::trunc(a.y), dex::trunc(a.z)};
+    }
+    template <typename T> forcedinline const vec3<T> floor(const vec3<T>& a) noexcept
+    {
+        using std::floor;
+        return {floor(a.x), floor(a.y), floor(a.z)};
+    }
+    template <typename T> forcedinline const vec3<T> ceil(const vec3<T>& a) noexcept
+    {
+        using std::ceil;
+        return {ceil(a.x), ceil(a.y), ceil(a.z)};
+    }
 #endif //GFXMATH_VEC3
 
 #if defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
-	template <typename T>
-	forcedinline const vec4<T> abs(const vec4<T>& a) noexcept { return { std::abs(a.x), std::abs(a.y), std::abs(a.z), std::abs(a.w) }; }
-	template <typename T>
-	forcedinline const vec4<T> exp(const vec4<T>& a) noexcept { return { std::exp(a.x), std::exp(a.y), std::exp(a.z), std::exp(a.w) }; }
-	template <typename T>
-	forcedinline const vec4<T> sqrt(const vec4<T>& a) noexcept { return { std::sqrt(a.x), std::sqrt(a.y), std::sqrt(a.z), std::sqrt(a.w) }; }
-	template <typename T>
-	forcedinline const vec4<T> sin(const vec4<T>& a) noexcept { return { std::sin(a.x), std::sin(a.y), std::sin(a.z), std::sin(a.w) }; }
-	template <typename T>
-	forcedinline const vec4<T> cos(const vec4<T>& a) noexcept { return { std::cos(a.x), std::cos(a.y), std::cos(a.z), std::cos(a.w) }; }
-	template <typename T>
-	forcedinline const vec4<T> approx_sqrt(const vec4<T>& a) noexcept { return { approx_sqrt(a.x), approx_sqrt(a.y), approx_sqrt(a.z), approx_sqrt(a.w) }; }
+    template <typename T> forcedinline const vec4<T> abs(const vec4<T>& a) noexcept
+    {
+        using std::abs;
+        return {abs(a.x), abs(a.y), abs(a.z), abs(a.w)};
+    }
+    template <typename T> forcedinline const vec4<T> exp(const vec4<T>& a) noexcept
+    {
+        using std::exp;
+        return {exp(a.x), exp(a.y), exp(a.z), exp(a.w)};
+    }
+    template <typename T> forcedinline const vec4<T> sqrt(const vec4<T>& a) noexcept
+    {
+        using std::sqrt;
+        return {sqrt(a.x), sqrt(a.y), sqrt(a.z), sqrt(a.w)};
+    }
+    template <typename T> forcedinline const vec4<T> sin(const vec4<T>& a) noexcept
+    {
+        using std::sin;
+        return {sin(a.x), sin(a.y), sin(a.z), sin(a.w)};
+    }
+    template <typename T> forcedinline const vec4<T> cos(const vec4<T>& a) noexcept
+    {
+        using std::cos;
+        return {cos(a.x), cos(a.y), cos(a.z), cos(a.w)};
+    }
+    template <typename T> forcedinline const vec4<T> approx_sqrt(const vec4<T>& a) noexcept
+    {
+        return {approx_sqrt(a.x), approx_sqrt(a.y), approx_sqrt(a.z), approx_sqrt(a.w)};
+    }
 
-	template <typename T>
-	forcedinline const vec4<T> sign(const vec4<T>& a) noexcept { return { select(a.x < 0, -1, 1), select(a.y < 0, -1, 1), select(a.z < 0, -1, 1), select(a.w < 0, -1, 1) }; }
-	template <>
-	forcedinline const vec4<float> sign(const vec4<float>& a) noexcept { return vec4<float>{ sign(a.x), sign(a.y), sign(a.z), sign(a.w) }; }
-	template <>
-	forcedinline const vec4<double> sign(const vec4<double>& a) noexcept { return vec4<double>{ sign(a.x), sign(a.y), sign(a.z), sign(a.w) }; }
+    template <typename T> forcedinline const vec4<T> sign(const vec4<T>& a) noexcept
+    {
+        return {select(a.x < 0, -1, 1), select(a.y < 0, -1, 1), select(a.z < 0, -1, 1), select(a.w < 0, -1, 1)};
+    }
+    template <> forcedinline const vec4<float> sign(const vec4<float>& a) noexcept
+    {
+        return vec4<float>{sign(a.x), sign(a.y), sign(a.z), sign(a.w)};
+    }
+    template <> forcedinline const vec4<double> sign(const vec4<double>& a) noexcept
+    {
+        return vec4<double>{sign(a.x), sign(a.y), sign(a.z), sign(a.w)};
+    }
 
-	template <typename T>
-	forcedinline const vec4<T> step(const vec4<T>& a, const vec4<T>& b) noexcept { return { T(select(b.x < a.x, 0, 1)), T(select(b.y < a.y, 0, 1)), T(select(b.z < a.z, 0, 1)), T(select(b.w < a.w, 0, 1)) }; }
-	template <>
-	forcedinline const vec4<float> step(const vec4<float>& a, const vec4<float>& b) noexcept { return { float(b.x >= a.x), float(b.y >= a.y), float(b.z >= a.z), float(b.w >= a.w) }; }
-	template <>
-	forcedinline const vec4<double> step(const vec4<double>& a, const vec4<double>& b) noexcept { return { double(b.x >= a.x), double(b.y >= a.y), double(b.z >= a.z), double(b.w >= a.w) }; }
+    template <typename T> forcedinline const vec4<T> step(const vec4<T>& a, const vec4<T>& b) noexcept
+    {
+        return {T(select(b.x < a.x, 0, 1)), T(select(b.y < a.y, 0, 1)), T(select(b.z < a.z, 0, 1)), T(select(b.w < a.w, 0, 1))};
+    }
+    template <> forcedinline const vec4<float> step(const vec4<float>& a, const vec4<float>& b) noexcept
+    {
+        return {float(b.x >= a.x), float(b.y >= a.y), float(b.z >= a.z), float(b.w >= a.w)};
+    }
+    template <> forcedinline const vec4<double> step(const vec4<double>& a, const vec4<double>& b) noexcept
+    {
+        return {double(b.x >= a.x), double(b.y >= a.y), double(b.z >= a.z), double(b.w >= a.w)};
+    }
 
-	template <typename T>
-	forcedinline const vec4<T> pow(const vec4<T>& a, const vec4<T>& b) noexcept { return { std::pow(a.x, b.x), std::pow(a.y, b.y), std::pow(a.z, b.z), std::pow(a.w, b.w) }; }
-	template <typename T>
-	forcedinline const vec4<T> pow(const vec4<T>& a, T b) noexcept { return { std::pow(a.x, b), std::pow(a.y, b), std::pow(a.z, b), std::pow(a.w, b) }; }
+    template <typename T> forcedinline const vec4<T> pow(const vec4<T>& a, const vec4<T>& b) noexcept
+    {
+        using std::pow;
+        return {pow(a.x, b.x), pow(a.y, b.y), pow(a.z, b.z), pow(a.w, b.w)};
+    }
+    template <typename T> forcedinline const vec4<T> pow(const vec4<T>& a, T b) noexcept
+    {
+        using std::pow;
+        return {pow(a.x, b), pow(a.y, b), pow(a.z, b), pow(a.w, b)};
+    }
 
-	template <typename T>
-	forcedinline const vec4<T> trunc(const vec4<T>& a) noexcept { return { std::trunc(a.x), std::trunc(a.y), std::trunc(a.z), std::trunc(a.w) }; }
-	template <typename T>
-	forcedinline const vec4<T> floor(const vec4<T>& a) noexcept { return { std::floor(a.x), std::floor(a.y), std::floor(a.z), std::floor(a.w) }; }
-	template <typename T>
-	forcedinline const vec4<T> ceil(const vec4<T>& a) noexcept { return { std::ceil(a.x), std::ceil(a.y), std::ceil(a.z), std::ceil(a.w) }; }
+    template <typename T> forcedinline const vec4<T> trunc(const vec4<T>& a) noexcept
+    {
+        return {dex::trunc(a.x), dex::trunc(a.y), dex::trunc(a.z), dex::trunc(a.w)};
+    }
+    template <typename T> forcedinline const vec4<T> floor(const vec4<T>& a) noexcept
+    {
+        using std::floor;
+        return {floor(a.x), floor(a.y), floor(a.z), floor(a.w)};
+    }
+    template <typename T> forcedinline const vec4<T> ceil(const vec4<T>& a) noexcept
+    {
+        using std::ceil;
+        return {ceil(a.x), ceil(a.y), ceil(a.z), ceil(a.w)};
+    }
 #endif //GFXMATH_VEC4
 
 #if defined(GFXMATH_ARGB) || defined(GFXMATH_ALL)
-	template <typename T>
-	forcedinline const ARGB<T> abs(const ARGB<T>& a) noexcept { return abs(a.vcl); }
-	template <typename T>
-	forcedinline const ARGB<T> exp(const ARGB<T>& a) noexcept { return exp(a.vcl); }
-	template <typename T>
-	forcedinline const ARGB<T> sqrt(const ARGB<T>& a) noexcept { return sqrt(a.vcl); }
-	template <typename T>
-	forcedinline const ARGB<T> sin(const ARGB<T>& a) noexcept { return sin(a.vcl); }
-	template <typename T>
-	forcedinline const ARGB<T> cos(const ARGB<T>& a) noexcept { return cos(a.vcl); }
-	template <typename T>
-	forcedinline const ARGB<T> approx_sqrt(const ARGB<T>& a) noexcept { return approx_sqrt(a.vcl); }
-	template <typename T>
-	forcedinline const ARGB<T> sign(const ARGB<T>& a) noexcept { return select(a.vcl < 0, -1, 1); }
-	template <typename T>
-	forcedinline const ARGB<T> step(const ARGB<T>& a, const ARGB<T>& b) noexcept { return select(b.vcl < a.vcl, 0, 1); }
-	template <typename T>
-	forcedinline const ARGB<T> pow(const ARGB<T>& a, const ARGB<T>& b) noexcept { return pow(a.vcl, b.vcl); }
-	template <typename T>
-	forcedinline const ARGB<T> pow(const ARGB<T>& a, T b) noexcept { return pow(a.vcl, b); }
-	template <typename T>
-	forcedinline const ARGB<T> trunc(const ARGB<T>& a) noexcept { return truncate(a.vcl); }
-	template <typename T>
-	forcedinline const ARGB<T> floor(const ARGB<T>& a) noexcept { return floor(a.vcl); }
-	template <typename T>
-	forcedinline const ARGB<T> ceil(const ARGB<T>& a) noexcept { return ceil(a.vcl); }
+    template <typename T> forcedinline const ARGB<T> abs(const ARGB<T>& a) noexcept
+    {
+        return abs(a.vcl);
+    }
+    template <typename T> forcedinline const ARGB<T> exp(const ARGB<T>& a) noexcept
+    {
+        return exp(a.vcl);
+    }
+    template <typename T> forcedinline const ARGB<T> sqrt(const ARGB<T>& a) noexcept
+    {
+        return sqrt(a.vcl);
+    }
+    template <typename T> forcedinline const ARGB<T> sin(const ARGB<T>& a) noexcept
+    {
+        return sin(a.vcl);
+    }
+    template <typename T> forcedinline const ARGB<T> cos(const ARGB<T>& a) noexcept
+    {
+        return cos(a.vcl);
+    }
+    template <typename T> forcedinline const ARGB<T> approx_sqrt(const ARGB<T>& a) noexcept
+    {
+        return approx_sqrt(a.vcl);
+    }
+    template <typename T> forcedinline const ARGB<T> sign(const ARGB<T>& a) noexcept
+    {
+        return select(a.vcl < 0, -1, 1);
+    }
+    template <typename T> forcedinline const ARGB<T> step(const ARGB<T>& a, const ARGB<T>& b) noexcept
+    {
+        return select(b.vcl < a.vcl, 0, 1);
+    }
+    template <typename T> forcedinline const ARGB<T> pow(const ARGB<T>& a, const ARGB<T>& b) noexcept
+    {
+        return pow(a.vcl, b.vcl);
+    }
+    template <typename T> forcedinline const ARGB<T> pow(const ARGB<T>& a, T b) noexcept
+    {
+        return pow(a.vcl, b);
+    }
+    template <typename T> forcedinline const ARGB<T> trunc(const ARGB<T>& a) noexcept
+    {
+        return truncate(a.vcl);
+    }
+    template <typename T> forcedinline const ARGB<T> floor(const ARGB<T>& a) noexcept
+    {
+        return floor(a.vcl);
+    }
+    template <typename T> forcedinline const ARGB<T> ceil(const ARGB<T>& a) noexcept
+    {
+        return ceil(a.vcl);
+    }
 #endif //GFXMATH_ARGB
 
-	template <typename T>
-	forcedinline const T step(T a, T b) noexcept { return T(b >= a); }
+    template <typename T> forcedinline const T step(T a, T b) noexcept
+    {
+        return select(b >= a, T(1), T(0));
+    }
 
-	template <typename T>
-	forcedinline const T modulo(const T& a, const T& b) { T t = a / b; return t - floor(t); }
+    template <typename T> forcedinline const T modulo(const T& a, const T& b)
+    {
+        using std::floor;
+        T t = a / b;
+        return t - floor(t);
+    }
 
-	static forcedinline float sign(float v) noexcept { *(uint32_t*)&v = (uint32_t(v < 0) << 31) | 0x3f800000U; return v; }
-	static forcedinline double sign(double v) noexcept { *(uint64_t*)&v = (uint64_t(v < 0) << 63) | 0x3ff0000000000000UL; return v; }
+    static forcedinline float sign(float v) noexcept
+    {
+        return v < 0 ? -1.0f : 1.0f;
+    }
+    static forcedinline double sign(double v) noexcept
+    {
+        return v < 0 ? -1.0 : 1.0;
+    }
 
 #if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
-	template <int N> using vec2fN = vec2<Float_t<N>>;
+    template <int N> using vec2fN = vec2<Float_t<N>>;
 	template <int N> using vec2dN = vec2<Double_t<N>>;
 
 	using vec2f = vec2fN<1>;
@@ -2380,9 +3576,19 @@ namespace dex
 	forcedinline float4 toFloat(float4 v) noexcept { return v; }
 	forcedinline float8 toFloat(float8 v) noexcept { return v; }
 	forcedinline float16 toFloat(float16 v) noexcept { return v; }
-	forcedinline double toDouble(double v) noexcept { return v; }
-	forcedinline double4 toDouble(double4 v) noexcept { return v; }
-	forcedinline double8 toDouble(double8 v) noexcept { return v; }
+    forcedinline double toDouble(double v) noexcept
+    {
+        return v;
+    }
+    forcedinline double2 toDouble(double2 v) noexcept
+    {
+        return v;
+    }
+    forcedinline double4 toDouble(double4 v) noexcept
+    {
+        return v;
+    }
+    forcedinline double8 toDouble(double8 v) noexcept { return v; }
 
 	template <typename T, typename F>
 	auto to_type(F from)
@@ -2396,226 +3602,460 @@ namespace dex
 	}
 
 #if defined(GFXMATH_VECN) || defined(GFXMATH_ALL)
-	template <typename... V>
-	class vectorN
-	{
-	public:
-		using Tuple = std::tuple<V...>;
-		using Scalar = Scalar_t<std::tuple_element_t<0, std::tuple<V...>>>;
-		static inline constexpr size_t numVectors = sizeof...(V);
-		static inline constexpr size_t numScalars = (... + elements_v<V>);
+    template <typename... V> class vectorN
+    {
+    public:
+        static_assert(sizeof...(V) > 0, "vectorN requires at least one scalar or SIMD block");
+        using Tuple = std::tuple<V...>;
+        using Scalar = Scalar_t<std::tuple_element_t<0, Tuple>>;
+        static inline constexpr size_t numVectors = sizeof...(V);
+        static inline constexpr size_t numScalars = (elements_v<V> + ...);
+        template <typename> using ScalarCast = Scalar;
+        static_assert(std::conjunction_v<std::is_same<Scalar_t<V>, Scalar>...>, "All blocks must have the same scalar type");
 
-		template <typename T>
-		using ScalarCast = Scalar;
+        // VCL lanes are read/written through their public API. No assumption
+        // about std::tuple layout, SIMD object aliasing or padding is needed.
+        class ScalarReference
+        {
+        public:
+            ScalarReference(vectorN& vector, size_t lane) : owner(vector), index(lane) {}
+            operator Scalar() const noexcept { return owner.extract(index); }
+            ScalarReference& operator=(Scalar value) noexcept
+            {
+                owner.insert(index, value);
+                return *this;
+            }
+            ScalarReference& operator=(const ScalarReference& value) noexcept { return *this = Scalar(value); }
+            ScalarReference& operator+=(Scalar value) noexcept { return *this = Scalar(*this) + value; }
+            ScalarReference& operator-=(Scalar value) noexcept { return *this = Scalar(*this) - value; }
+            ScalarReference& operator*=(Scalar value) noexcept { return *this = Scalar(*this) * value; }
+            ScalarReference& operator/=(Scalar value) noexcept { return *this = Scalar(*this) / value; }
 
-		static_assert(std::conjunction_v<std::is_same<Scalar_t<V>, Scalar>...>, "All template parameters must have the same scalar type");
-		static constexpr size_t size() { return numScalars; };
+        private:
+            vectorN& owner;
+            size_t index;
+        };
 
-		vectorN() : tuple(std::make_tuple(V(0)...)) {}
-		vectorN(const vectorN& v) : tuple(v.tuple) {}
-		vectorN(const Tuple& t) : tuple(t) {}
-		vectorN(Scalar v) : tuple(std::make_tuple(V(v)...)) {}
-		vectorN(std::array<Scalar, numScalars> scalars)
-		{
-			for (int i = 0; i < numScalars; ++i)
-				(*this)[i] = scalars[i];
-		}
+        static constexpr size_t size() noexcept { return numScalars; }
+        static constexpr int elementtype() noexcept { return std::is_same_v<Scalar, float> ? 16 : 17; }
+        vectorN() : tuple(V(0)...) {}
+        vectorN(const vectorN&) = default;
+        vectorN& operator=(const vectorN&) = default;
+        vectorN(const Tuple& value) : tuple(value) {}
+        vectorN(Scalar value) : tuple(V(value)...) {}
+        vectorN(const std::array<Scalar, numScalars>& values) : vectorN()
+        {
+            size_t offset = 0;
+            std::apply(
+                [&](auto&... blocks)
+                {
+                    const auto load = [&](auto& block)
+                    {
+                        using Block = std::remove_reference_t<decltype(block)>;
+                        if constexpr (std::is_arithmetic_v<Block>)
+                        {
+                            block = values[offset];
+                        }
+                        else
+                        {
+                            block.load(values.data() + offset);
+                        }
+                        offset += elements_v<Block>;
+                    };
+                    (load(blocks), ...);
+                },
+                tuple);
+        }
+        Tuple& getTuple() noexcept { return tuple; }
+        const Tuple& getTuple() const noexcept { return tuple; }
+        template <size_t I> auto& getVector() noexcept { return std::get<I>(tuple); }
+        template <size_t I> const auto& getVector() const noexcept { return std::get<I>(tuple); }
+        ScalarReference operator[](size_t index) noexcept
+        {
+            assert(index < numScalars);
+            return {*this, index};
+        }
+        Scalar operator[](size_t index) const noexcept { return extract(index); }
+        Scalar extract(size_t index) const noexcept
+        {
+            assert(index < numScalars);
+            return extractBlock<0>(index);
+        }
+        void insert(size_t index, Scalar value) noexcept
+        {
+            assert(index < numScalars);
+            insertBlock<0>(index, value);
+        }
+        vectorN& operator+=(const vectorN& other) noexcept
+        {
+            applyAssign(
+                other,
+                [](auto& a, const auto& b)
+                {
+                    a += b;
+                },
+                indices);
+            return *this;
+        }
+        vectorN& operator-=(const vectorN& other) noexcept
+        {
+            applyAssign(
+                other,
+                [](auto& a, const auto& b)
+                {
+                    a -= b;
+                },
+                indices);
+            return *this;
+        }
+        vectorN& operator*=(const vectorN& other) noexcept
+        {
+            applyAssign(
+                other,
+                [](auto& a, const auto& b)
+                {
+                    a *= b;
+                },
+                indices);
+            return *this;
+        }
+        vectorN& operator/=(const vectorN& other) noexcept
+        {
+            applyAssign(
+                other,
+                [](auto& a, const auto& b)
+                {
+                    a /= b;
+                },
+                indices);
+            return *this;
+        }
+        vectorN operator+(const vectorN& other) const noexcept
+        {
+            return binary(
+                other,
+                [](auto a, auto b)
+                {
+                    return a + b;
+                },
+                indices);
+        }
+        vectorN operator-(const vectorN& other) const noexcept
+        {
+            return binary(
+                other,
+                [](auto a, auto b)
+                {
+                    return a - b;
+                },
+                indices);
+        }
+        vectorN operator*(const vectorN& other) const noexcept
+        {
+            return binary(
+                other,
+                [](auto a, auto b)
+                {
+                    return a * b;
+                },
+                indices);
+        }
+        vectorN operator/(const vectorN& other) const noexcept
+        {
+            return binary(
+                other,
+                [](auto a, auto b)
+                {
+                    return a / b;
+                },
+                indices);
+        }
+        vectorN operator-() const noexcept
+        {
+            return binary(
+                *this,
+                [](auto a, auto)
+                {
+                    return -a;
+                },
+                indices);
+        }
+        vectorN operator==(const vectorN& other) const noexcept
+        {
+            return compare(other,
+                [](auto a, auto b)
+                {
+                    return a == b;
+                });
+        }
+        vectorN operator>(const vectorN& other) const noexcept
+        {
+            return compare(other,
+                [](auto a, auto b)
+                {
+                    return a > b;
+                });
+        }
+        vectorN operator>=(const vectorN& other) const noexcept
+        {
+            return compare(other,
+                [](auto a, auto b)
+                {
+                    return a >= b;
+                });
+        }
+        vectorN operator<(const vectorN& other) const noexcept
+        {
+            return compare(other,
+                [](auto a, auto b)
+                {
+                    return a < b;
+                });
+        }
+        vectorN operator<=(const vectorN& other) const noexcept
+        {
+            return compare(other,
+                [](auto a, auto b)
+                {
+                    return a <= b;
+                });
+        }
+        auto equals(const vectorN& other) const noexcept
+        {
+            return masks(
+                other,
+                [](auto a, auto b)
+                {
+                    return a == b;
+                },
+                indices);
+        }
+        auto greaterThan(const vectorN& other) const noexcept
+        {
+            return masks(
+                other,
+                [](auto a, auto b)
+                {
+                    return a > b;
+                },
+                indices);
+        }
+        auto greaterThanOrEquals(const vectorN& other) const noexcept
+        {
+            return masks(
+                other,
+                [](auto a, auto b)
+                {
+                    return a >= b;
+                },
+                indices);
+        }
+        auto lessThan(const vectorN& other) const noexcept
+        {
+            return masks(
+                other,
+                [](auto a, auto b)
+                {
+                    return a < b;
+                },
+                indices);
+        }
+        auto lessThanOrEquals(const vectorN& other) const noexcept
+        {
+            return masks(
+                other,
+                [](auto a, auto b)
+                {
+                    return a <= b;
+                },
+                indices);
+        }
+        Scalar dot(const vectorN& other) const noexcept { return dotBlocks(other, indices); }
+        Scalar sum() const noexcept { return sumBlocks(indices); }
+        Scalar prod() const noexcept
+        {
+            Scalar result = Scalar(1);
+            std::apply(
+                [&](const auto&... blocks)
+                {
+                    const auto multiply = [&](const auto& block)
+                    {
+                        using Block = std::remove_cv_t<std::remove_reference_t<decltype(block)>>;
+                        if constexpr (std::is_arithmetic_v<Block>)
+                        {
+                            result *= block;
+                        }
+                        else
+                        {
+                            for (size_t lane = 0; lane < elements_v<Block>; ++lane)
+                            {
+                                result *= block.extract((int)lane);
+                            }
+                        }
+                    };
+                    (multiply(blocks), ...);
+                },
+                tuple);
+            return result;
+        }
+        Scalar lengthSquared() const noexcept { return dot(*this); }
+        Scalar length() const noexcept { return std::sqrt(lengthSquared()); }
+        vectorN& normalize() noexcept
+        {
+            *this /= vectorN(length() + Epsilon<Scalar>);
+            return *this;
+        }
+        vectorN normalized() const noexcept { return *this / vectorN(length() + Epsilon<Scalar>); }
+        vectorN limit() const noexcept
+        {
+            Scalar maximum = extract(0);
+            for (size_t index = 1; index < numScalars; ++index)
+            {
+                maximum = std::max(maximum, extract(index));
+            }
+            return maximum > Scalar(1) ? *this / vectorN(maximum) : *this;
+        }
 
-		forcedinline Tuple& getTuple() noexcept { return tuple; }
-		template <size_t I>
-		forcedinline auto& getVector() noexcept { return std::get<I>(tuple); }
-		forcedinline Scalar& operator[](size_t index)
-		{
-			return *reinterpret_cast<Scalar*>((char*)this + elementOffset[index]);
-		}
+    private:
+        static constexpr auto indices = std::index_sequence_for<V...>{};
+        template <size_t I> Scalar extractBlock(size_t index) const noexcept
+        {
+            using Block = std::tuple_element_t<I, Tuple>;
+            if (index < elements_v<Block>)
+            {
+                if constexpr (std::is_arithmetic_v<Block>)
+                {
+                    return std::get<I>(tuple);
+                }
+                else
+                {
+                    return std::get<I>(tuple).extract((int)index);
+                }
+            }
+            if constexpr (I + 1 < numVectors)
+            {
+                return extractBlock<I + 1>(index - elements_v<Block>);
+            }
+            return Scalar(0);
+        }
+        template <size_t I> void insertBlock(size_t index, Scalar value) noexcept
+        {
+            using Block = std::tuple_element_t<I, Tuple>;
+            if (index < elements_v<Block>)
+            {
+                if constexpr (std::is_arithmetic_v<Block>)
+                {
+                    std::get<I>(tuple) = value;
+                }
+                else
+                {
+                    std::get<I>(tuple).insert((int)index, value);
+                }
+                return;
+            }
+            if constexpr (I + 1 < numVectors)
+            {
+                insertBlock<I + 1>(index - elements_v<Block>, value);
+            }
+        }
+        template <typename Function, size_t... I> void applyAssign(const vectorN& other, Function function, std::index_sequence<I...>)
+        {
+            (function(std::get<I>(tuple), std::get<I>(other.tuple)), ...);
+        }
+        template <typename Function, size_t... I> vectorN binary(const vectorN& other, Function function, std::index_sequence<I...>) const
+        {
+            return Tuple(function(std::get<I>(tuple), std::get<I>(other.tuple))...);
+        }
+        template <typename Function> vectorN compare(const vectorN& other, Function function) const
+        {
+            return binary(
+                other,
+                [&](auto a, auto b)
+                {
+                    using Block = decltype(a);
+                    if constexpr (std::is_arithmetic_v<Block>)
+                    {
+                        return Block(function(a, b) ? 1 : 0);
+                    }
+                    else
+                    {
+                        return select(function(a, b), Block(1), Block(0));
+                    }
+                },
+                indices);
+        }
+        template <typename Function, size_t... I> auto masks(const vectorN& other, Function function, std::index_sequence<I...>) const
+        {
+            return std::make_tuple(function(std::get<I>(tuple), std::get<I>(other.tuple))...);
+        }
+        template <size_t... I> Scalar dotBlocks(const vectorN& other, std::index_sequence<I...>) const
+        {
+            return (dex::hadd(std::get<I>(tuple) * std::get<I>(other.tuple)) + ...);
+        }
+        template <size_t... I> Scalar sumBlocks(std::index_sequence<I...>) const { return (dex::hadd(std::get<I>(tuple)) + ...); }
+        Tuple tuple;
+    };
 
-		forcedinline vectorN& operator+= (const vectorN& other) noexcept { return tAddAssign(other, is); }
-		forcedinline vectorN& operator-= (const vectorN& other) noexcept { return tSubAssign(other, is); }
-		forcedinline vectorN& operator*= (const vectorN& other) noexcept { return tMulAssign(other, is); }
-		forcedinline vectorN& operator/= (const vectorN& other) noexcept { return tDivAssign(other, is); }
+    namespace vectorN_impl
+    {
+        template <size_t Size, size_t VSHead, size_t... VSTail> static constexpr size_t nextVectorSize()
+        {
+            if constexpr (Size >= VSHead)
+                return VSHead;
+            else if constexpr (sizeof...(VSTail) > 0 && Size > 0)
+                return nextVectorSize<Size, VSTail...>();
+            else
+                return 0;
+        }
 
-		forcedinline vectorN operator+  (const vectorN& other) const noexcept { return tAdd(other, is); }
-		forcedinline vectorN operator-  (const vectorN& other) const noexcept { return tSub(other, is); }
-		forcedinline vectorN operator-  () const noexcept { return tNeg(is); }
-		forcedinline vectorN operator*  (const vectorN& other) const noexcept { return tMul(other, is); }
-		forcedinline vectorN operator/  (const vectorN& other) const noexcept { return tDiv(other, is); }
+        template <size_t Size, size_t... VectorSizes> static constexpr size_t tupleVectors()
+        {
+            constexpr auto selected = nextVectorSize<Size, VectorSizes...>();
+            static_assert(selected > 0, "Vector block sizes cannot represent the requested scalar count");
+            constexpr auto r = Size - selected;
+            if constexpr (r > 0)
+                return 1 + tupleVectors<r, VectorSizes...>();
+            return 1;
+        }
 
-		forcedinline vectorN operator== (const vectorN& other) const noexcept { return tOpEq(other, is); }
-		forcedinline vectorN operator>  (const vectorN& other) const noexcept { return tOpGr(other, is); }
-		forcedinline vectorN operator>= (const vectorN& other) const noexcept { return tOpGrEq(other, is); }
-		forcedinline vectorN operator<  (const vectorN& other) const noexcept { return tOpLe(other, is); }
-		forcedinline vectorN operator<= (const vectorN& other) const noexcept { return tOpLeEq(other, is); }
+        template <size_t Size, size_t... VectorSizes> static constexpr size_t tupleVectorScalars(size_t n)
+        {
+            constexpr size_t vs[] = {VectorSizes...};
+            size_t size = Size, s = 0;
+            for (++n; s < sizeof...(VectorSizes) && n > 0; ++s)
+            {
+                while (size >= vs[s] && n > 0)
+                {
+                    size -= vs[s];
+                    --n;
+                }
+                if (n == 0)
+                    break;
+            }
+            return s < sizeof...(VectorSizes) ? vs[s] : 0;
+        }
 
-		forcedinline auto equals(const vectorN& other) const noexcept { return tEq(other, is); }
-		forcedinline auto greaterThan(const vectorN& other) const noexcept { return tGr(other, is); }
-		forcedinline auto greaterThanOrEquals(const vectorN& other) const noexcept { return tGrEq(other, is); }
-		forcedinline auto lessThan(const vectorN& other) const noexcept { return tLe(other, is); }
-		forcedinline auto lessThanOrEquals(const vectorN& other) const noexcept { return tLeEq(other, is); }
+        template <typename T, typename Seq> struct vectorN_from_vectors;
+        template <typename T, size_t... Vectors> struct vectorN_from_vectors<T, std::index_sequence<Vectors...>>
+        {
+            using type = vectorN<Vector_t<T, Vectors>...>;
+        };
+        template <typename T, size_t Size, size_t... VectorSizes> struct vectorN_type
+        {
+            static_assert(Size > 0, "A vector must contain at least one scalar");
+            static_assert(sizeof...(VectorSizes) > 0 && ((VectorSizes > 0) && ...), "Block widths must be positive");
+            static constexpr auto n = tupleVectors<Size, VectorSizes...>();
+            using type = typename vectorN_from_vectors<T,
+                seq::modify_t<tupleVectorScalars<Size, VectorSizes...>, std::make_index_sequence<n>>>::type;
+        };
 
-		forcedinline Scalar dot(const vectorN& other) const noexcept { return dot(other, is); }
-		forcedinline Scalar sum() const noexcept { return sum(is); }
-		forcedinline Scalar prod() const noexcept { return prod(is); }
-		forcedinline Scalar length() const noexcept { return sqrt(dot(tuple, is)); }
-		forcedinline Scalar lengthSquared() const noexcept { return dot(tuple, is); }
-		forcedinline vectorN& normalize() noexcept { auto lr = 1.0f / (length() + Epsilon<Scalar>); *this *= lr; return *this; }
-		forcedinline vectorN normalized() const noexcept { auto lr = 1.0f / (length() + Epsilon<Scalar>); return *this * lr; }
-		forcedinline vectorN limit() const noexcept
-		{
-			auto m = 1.0f / max(*this);
-			return select(m < 1.0f, *this * m, *this);
-		}
-	protected:
-		static constexpr auto is = std::index_sequence_for<V...>{};
+    }
 
-		template <size_t... Is>
-		forcedinline vectorN& tAddAssign(const vectorN& other, std::index_sequence<Is...>) noexcept { ((std::get<Is>(tuple) += std::get<Is>(other.tuple)), ...); return *this; }
-		template <size_t... Is>
-		forcedinline vectorN& tSubAssign(const vectorN& other, std::index_sequence<Is...>) noexcept { ((std::get<Is>(tuple) -= std::get<Is>(other.tuple)), ...); return *this; }
-		template <size_t... Is>
-		forcedinline vectorN& tMulAssign(const vectorN& other, std::index_sequence<Is...>) noexcept { ((std::get<Is>(tuple) *= std::get<Is>(other.tuple)), ...); return *this; }
-		template <size_t... Is>
-		forcedinline vectorN& tDivAssign(const vectorN& other, std::index_sequence<Is...>) noexcept { ((std::get<Is>(tuple) /= std::get<Is>(other.tuple)), ...); return *this; }
-
-		template <size_t... Is>
-		forcedinline vectorN tAdd(const vectorN& other, std::index_sequence<Is...>) const noexcept { return std::make_tuple(std::get<Is>(tuple) + std::get<Is>(other.tuple)...); }
-		template <size_t... Is>
-		forcedinline vectorN tSub(const vectorN& other, std::index_sequence<Is...>) const noexcept { return std::make_tuple(std::get<Is>(tuple) - std::get<Is>(other.tuple)...); }
-		template <size_t... Is>
-		forcedinline vectorN tNeg(std::index_sequence<Is...>) const noexcept { return std::make_tuple(-std::get<Is>(tuple)...); }
-		template <size_t... Is>
-		forcedinline vectorN tMul(const vectorN& other, std::index_sequence<Is...>) const noexcept { return std::make_tuple(std::get<Is>(tuple) * std::get<Is>(other.tuple)...); }
-		template <size_t... Is>
-		forcedinline vectorN tDiv(const vectorN& other, std::index_sequence<Is...>) const noexcept { return std::make_tuple(std::get<Is>(tuple) / std::get<Is>(other.tuple)...); }
-
-		template <size_t... Is>
-		forcedinline vectorN tOpEq(const vectorN& other, std::index_sequence<Is...>) const noexcept { return std::make_tuple(std::tuple_element_t<Is, Tuple>(std::get<Is>(tuple) == std::get<Is>(other.tuple))...); }
-		template <size_t... Is>
-		forcedinline vectorN tOpGr(const vectorN& other, std::index_sequence<Is...>) const noexcept { return std::make_tuple(std::tuple_element_t<Is, Tuple>(std::get<Is>(tuple) > std::get<Is>(other.tuple))...); }
-		template <size_t... Is>
-		forcedinline vectorN tOpGrEq(const vectorN& other, std::index_sequence<Is...>) const noexcept { return std::make_tuple(std::tuple_element_t<Is, Tuple>(std::get<Is>(tuple) >= std::get<Is>(other.tuple))...); }
-		template <size_t... Is>
-		forcedinline vectorN tOpLe(const vectorN& other, std::index_sequence<Is...>) const noexcept { return std::make_tuple(std::tuple_element_t<Is, Tuple>(std::get<Is>(tuple) < std::get<Is>(other.tuple))...); }
-		template <size_t... Is>
-		forcedinline vectorN tOpLeEq(const vectorN& other, std::index_sequence<Is...>) const noexcept { return std::make_tuple(std::tuple_element_t<Is, Tuple>(std::get<Is>(tuple) <= std::get<Is>(other.tuple))...); }
-
-		template <size_t... Is>
-		forcedinline auto tEq(const vectorN& other, std::index_sequence<Is...>) const noexcept { return std::make_tuple((std::get<Is>(tuple).equals(std::get<Is>(other.tuple)))...); }
-		template <size_t... Is>
-		forcedinline auto tGr(const vectorN& other, std::index_sequence<Is...>) const noexcept { return std::make_tuple((std::get<Is>(tuple).greaterThan(std::get<Is>(other.tuple)))...); }
-		template <size_t... Is>
-		forcedinline auto tGrEq(const vectorN& other, std::index_sequence<Is...>) const noexcept { return std::make_tuple((std::get<Is>(tuple).greaterThanOrEquals(std::get<Is>(other.tuple)))...); }
-		template <size_t... Is>
-		forcedinline auto tLe(const vectorN& other, std::index_sequence<Is...>) const noexcept { return std::make_tuple((std::get<Is>(tuple).lessThan(std::get<Is>(other.tuple)))...); }
-		template <size_t... Is>
-		forcedinline auto tLeEq(const vectorN& other, std::index_sequence<Is...>) const noexcept { return std::make_tuple((std::get<Is>(tuple).lessThanOrEquals(std::get<Is>(other.tuple)))...); }
-
-		template <size_t... Is>
-		forcedinline Scalar dot(const vectorN& other, std::index_sequence<Is...>) const noexcept { return (... + ::dot(std::get<Is>(tuple), std::get<Is>(other.tuple))); }
-		template <size_t... Is>
-		forcedinline Scalar sum(std::index_sequence<Is...>) const noexcept { return (... + hadd(std::get<Is>(tuple))); }
-
-		template <typename Seq>
-		struct tup_vec_scalars;
-		template <size_t... Ints>
-		struct tup_vec_scalars<std::index_sequence<Ints...>>
-		{
-			using type = std::index_sequence<elements_v<std::tuple_element_t<Ints, Tuple>>...>;
-		};
-
-		// Create a sequence of the number of vector elements per tuple element
-		template <typename Tuple>
-		using tup_vec_scalars_t = typename tup_vec_scalars<std::make_index_sequence<numVectors>>::type;
-
-		//template <typename Tuple>
-		//static constexpr auto tupleVectorScalars = seq::sum_v<seq::vec_sequence_t<Tuple>>;
-
-		template <typename T, size_t I>
-		static constexpr void* getTupleOffset(T& t)
-		{
-			return std::addressof(std::get<I>(t));
-		}
-
-		template <size_t... Ints>
-		static std::array<size_t, numScalars> buildTable(std::index_sequence<Ints...>)
-		{
-			Tuple t;
-			constexpr auto scalars = seq::seqToArray<tup_vec_scalars_t<Tuple>>;
-			using function_ptr = void* (*)(Tuple&);
-			function_ptr offs[] = { &getTupleOffset<Tuple, Ints>... };
-			std::array<size_t, numVectors> tupleOffset{ size_t((char*)offs[Ints](t) - (char*)&t)... };
-			std::array<size_t, numScalars> scalarOffsets{};
-			for (size_t v = 0, o = 0; v < numVectors; ++v)
-				for (size_t s = 0; s < scalars[v]; ++s, ++o)
-					scalarOffsets[o] = tupleOffset[v] + sizeof(Scalar) * s;
-			return scalarOffsets;
-		}
-
-		static inline std::array<size_t, numScalars> elementOffset = buildTable(std::make_index_sequence<numVectors>{});
-
-		Tuple tuple;
-	};
-
-	namespace vectorN_impl
-	{
-		template <size_t Size, size_t VSHead, size_t... VSTail>
-		static constexpr size_t nextVectorSize()
-		{
-			if constexpr (Size >= VSHead)
-				return VSHead;
-			else if constexpr (sizeof...(VSTail) > 0 && Size > 0)
-				return nextVectorSize<Size, VSTail...>();
-			else
-				return 0;
-		}
-
-		template <size_t Size, size_t... VectorSizes>
-		static constexpr size_t tupleVectors()
-		{
-			constexpr auto r = Size - nextVectorSize<Size, VectorSizes...>();
-			if constexpr (r > 0)
-				return 1 + tupleVectors<r, VectorSizes...>();
-			return 1;
-		}
-
-		template <size_t Size, size_t... VectorSizes>
-		static constexpr size_t tupleVectorScalars(size_t n)
-		{
-			constexpr size_t vs[] = { VectorSizes... };
-			size_t size = Size, s = 0;
-			for (++n; s < sizeof...(VectorSizes) && n > 0; ++s)
-			{
-				while (size >= vs[s] && n > 0)
-				{
-					size -= vs[s];
-					--n;
-				}
-				if (n == 0)
-					break;
-			}
-			return s < sizeof...(VectorSizes) ? vs[s] : 0;
-		}
-
-		template <typename T, typename Seq>
-		struct vectorN_from_vectors;
-		template <typename T, size_t... Vectors>
-		struct vectorN_from_vectors<T, std::index_sequence<Vectors...>> { using type = vectorN<Vector_t<T, Vectors>...>; };
-		template <typename T, size_t Size, size_t... VectorSizes>
-		struct vectorN_type
-		{
-			static constexpr auto n = tupleVectors<Size, VectorSizes...>();
-			using type = vectorN_from_vectors<T, seq::modify_t<tupleVectorScalars<Size, VectorSizes...>, std::make_index_sequence<n>>>::type;
-		};
-
-	}
-
-	template <typename T, size_t Size, size_t... VectorSizes>
-	using vecNT = typename vectorN_impl::vectorN_type<T, Size, VectorSizes...>::type;
-	template <typename T, size_t Size>
-	using vecN = vecNT<T, Size, 8, 4, 1>;
-	template <size_t Size>
-	using vecNf = vecNT<float, Size, 8, 4, 1>;
-	template <size_t Size>
-	using vecNd = vecNT<double, Size, 4, 1>;
+    template <typename T, size_t Size, size_t... VectorSizes>
+    using vecNT = typename vectorN_impl::vectorN_type<T, Size, VectorSizes...>::type;
+    template <typename T, size_t Size> using vecN = vecNT<T, Size, 8, 4, 1>;
+    template <size_t Size> using vecNf = vecNT<float, Size, 8, 4, 1>;
+    template <size_t Size> using vecNd = vecNT<double, Size, 4, 1>;
 #endif //GFXMATH_VECN
 
 #if defined(GFXMATH_VEC3) && defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
@@ -2645,680 +4085,643 @@ namespace dex
 	[0.0, 0.0, 1.0, 0.0]
 	[p.x, p.y, p.z, 1.0]
 	*/
-	template <typename T>
-	class Matrix4
-	{
-	public:
-		Matrix4() {}
-		Matrix4(int) { setIdentity(); }
-		Matrix4(const Matrix4& other) :
-			col0(other.col0), col1(other.col1), col2(other.col2), col3(other.col3)
-		{
-		}
-		forcedinline Matrix4(Vector_t<T, 4> col0, Vector_t<T, 4> col1, Vector_t<T, 4> col2, Vector_t<T, 4> col3 = Vector_t<T, 4>{ 0, 0, 0, 1 }) :
-			col0(col0), col1(col1), col2(col2), col3(col3)
-		{
-		}
-		forcedinline Matrix4(vec4<T> col0, vec4<T> col1, vec4<T> col2, vec4<T> col3 = vec4<T>{ 0, 0, 0, 1 }) :
-			col0(col0.vcl), col1(col1.vcl), col2(col2.vcl), col3(col3.vcl)
-		{
-		}
-		forcedinline Matrix4(vec3<T> col0, vec3<T> col1, vec3<T> col2) :
-			col0(vec4<T>(col0).vcl), col1(vec4<T>(col1).vcl), col2(vec4<T>(col2).vcl), col3(Vector_t<T, 4>{0, 0, 0, 1})
-		{
-		}
+    template <typename T> class Matrix4
+    {
+    public:
+        Matrix4() {}
+        Matrix4(int) { setIdentity(); }
+        Matrix4(const Matrix4& other) : col0(other.col0), col1(other.col1), col2(other.col2), col3(other.col3) {}
+        forcedinline Matrix4(
+            Vector_t<T, 4> col0, Vector_t<T, 4> col1, Vector_t<T, 4> col2, Vector_t<T, 4> col3 = Vector_t<T, 4>{0, 0, 0, 1})
+            : col0(col0), col1(col1), col2(col2), col3(col3)
+        {
+        }
+        forcedinline Matrix4(vec4<T> col0, vec4<T> col1, vec4<T> col2, vec4<T> col3 = vec4<T>{0, 0, 0, 1})
+            : col0(col0.vcl), col1(col1.vcl), col2(col2.vcl), col3(col3.vcl)
+        {
+        }
+        forcedinline Matrix4(vec3<T> col0, vec3<T> col1, vec3<T> col2)
+            : col0(vec4<T>(col0).vcl), col1(vec4<T>(col1).vcl), col2(vec4<T>(col2).vcl), col3(Vector_t<T, 4>{0, 0, 0, 1})
+        {
+        }
 
-		forcedinline Matrix4& operator=(const Matrix4& other)
-		{
-			col0 = other.col0;
-			col1 = other.col1;
-			col2 = other.col2;
-			col3 = other.col3;
-			return *this;
-		}
+        forcedinline Matrix4& operator=(const Matrix4& other)
+        {
+            col0 = other.col0;
+            col1 = other.col1;
+            col2 = other.col2;
+            col3 = other.col3;
+            return *this;
+        }
 
-		forcedinline vec3<T> transformPoint(const vec3<T> v) const noexcept
-		{
-			vec3<T> result;
-			multiply(vec4<T>(v)).vcl.store_partial(3, &result.x);
-			return result;
-		}
+        forcedinline vec3<T> transformPoint(const vec3<T> v) const noexcept
+        {
+            vec3<T> result;
+            multiply(vec4<T>(v, T(1))).vcl.store_partial(3, &result.x);
+            return result;
+        }
 
-		forcedinline vec4<T> transformPoint(const vec4<T> v) const noexcept
-		{
-			return multiply(v.withW(1));
-		}
+        forcedinline vec4<T> transformPoint(const vec4<T> v) const noexcept { return multiply(v.withW(1)); }
 
-		//forcedinline V3_t<T, 4> transformPoint(const V3_t<T, 4>& v) const noexcept
-		//{
-		//    V3_t<T, 4> result;
+        //forcedinline V3_t<T, 4> transformPoint(const V3_t<T, 4>& v) const noexcept
+        //{
+        //    V3_t<T, 4> result;
 
-		//    Vector_t<T, 8> vx(to_type<T>(v.x), 0), vy(to_type<T>(v.y), 0), vz(to_type<T>(v.z), 0), vw(1);
-		//    Vector_t<T, 8> c0(col0, col0), c1(col1, col1), c2(col2, col2), c3(col3, col3);
+        //    Vector_t<T, 8> vx(to_type<T>(v.x), 0), vy(to_type<T>(v.y), 0), vz(to_type<T>(v.z), 0), vw(1);
+        //    Vector_t<T, 8> c0(col0, col0), c1(col1, col1), c2(col2, col2), c3(col3, col3);
 
-		//    auto r0 = 
-		//        c0 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vx) +
-		//        c1 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vy) +
-		//        c2 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vz) +
-		//        c3 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vw);
-		//    auto r1 = 
-		//        c0 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vx) +
-		//        c1 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vy) +
-		//        c2 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vz) +
-		//        c3 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vw);
+        //    auto r0 =
+        //        c0 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vx) +
+        //        c1 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vy) +
+        //        c2 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vz) +
+        //        c3 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vw);
+        //    auto r1 =
+        //        c0 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vx) +
+        //        c1 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vy) +
+        //        c2 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vz) +
+        //        c3 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vw);
 
-		//    auto q0 = blend8<0, 4, 8, 12, 1, 5, 9, 13>(r0, r1);
-		//    auto q1 = blend8<2, 6, 10, 14, 3, 7, 11, 15>(r0, r1);
+        //    auto q0 = blend8<0, 4, 8, 12, 1, 5, 9, 13>(r0, r1);
+        //    auto q1 = blend8<2, 6, 10, 14, 3, 7, 11, 15>(r0, r1);
 
-		//    to_type<T>(q0).store(reinterpret_cast<T*>(&result.x));
-		//    to_type<T>(q1).store_partial(4, reinterpret_cast<T*>(&result.z));
-		//    return result;
-		//}
+        //    to_type<T>(q0).store(reinterpret_cast<T*>(&result.x));
+        //    to_type<T>(q1).store_partial(4, reinterpret_cast<T*>(&result.z));
+        //    return result;
+        //}
 
-		//template <typename F>
-		//forcedinline V3_t<F, 8> transformPoint(const V3_t<F, 8>& v) const noexcept
-		//{
-		//    auto low = transformPoint(v.get_low());
-		//    auto high = transformPoint(v.get_high());
-		//    return low.concatenate2(high);
-		//}
+        //template <typename F>
+        //forcedinline V3_t<F, 8> transformPoint(const V3_t<F, 8>& v) const noexcept
+        //{
+        //    auto low = transformPoint(v.get_low());
+        //    auto high = transformPoint(v.get_high());
+        //    return low.concatenate2(high);
+        //}
 
-		template <typename F>
-		forcedinline vec3<F> transformPointCartesian(const vec3<F> v) const noexcept
-		{
-			vec3<F> result;
-			auto r = multiply(vec4<F>(v, 1));
-			to_type<F>(r / permute4<3, 3, 3, 3>(r.vcl)).vcl.store_partial(3, &result.x);
-			return result;
-		}
+        template <typename F> forcedinline vec3<F> transformPointCartesian(const vec3<F> v) const noexcept
+        {
+            vec3<F> result;
+            auto r = multiply(vec4<F>(v, 1));
+            to_type<F>(r / permute4<3, 3, 3, 3>(r.vcl)).vcl.store_partial(3, &result.x);
+            return result;
+        }
 
-		template <typename F>
-		forcedinline vec4<F> transformPointCartesian(const vec4<F> v) const noexcept
-		{
-			auto r = multiply(v.withW(1));
-			return to_type<F>(r / permute4<3, 3, 3, 3>(r.vcl));
-		}
+        template <typename F> forcedinline vec4<F> transformPointCartesian(const vec4<F> v) const noexcept
+        {
+            auto r = multiply(v.withW(1));
+            return to_type<F>(r / permute4<3, 3, 3, 3>(r.vcl));
+        }
 
-		template <typename F>
-		forcedinline V3_t<F, 4> transformPointCartesian(const V3_t<F, 4> v) const noexcept
-		{
-			V3_t<F, 4> result;
+        template <typename F> forcedinline V3_t<F, 4> transformPointCartesian(const V3_t<F, 4> v) const noexcept
+        {
+            if constexpr (!std::is_same_v<T, F>)
+            {
+                V3_t<F, 4> result;
 
-			Vector_t<T, 8> vx(to_type<T>(v.x), 0), vy(to_type<T>(v.y), 0), vz(to_type<T>(v.z), 0), vw(1);
-			Vector_t<T, 8> c0(col0, col0), c1(col1, col1), c2(col2, col2), c3(col3, col3);
+                for (int index = 0; index < 4; ++index)
+                {
+                    const vec3<T> input(v.extract(index));
+                    result.insert(index, vec3<F>(transformPointCartesian(input)));
+                }
 
-			auto r0 =
-				c0 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vx) +
-				c1 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vy) +
-				c2 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vz) +
-				c3 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vw);
-			auto r1 =
-				c0 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vx) +
-				c1 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vy) +
-				c2 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vz) +
-				c3 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vw);
+                return result;
+            }
+            else
+            {
 
-			auto q0 = blend8<0, 4, 8, 12, 1, 5, 9, 13>(r0, r1);
-			auto q1 = blend8<2, 6, 10, 14, 3, 7, 11, 15>(r0, r1);
+                V3_t<F, 4> result;
 
-			to_type<F>(q0 / permute8<4, 5, 6, 7, 4, 5, 6, 7 >(q1)).store(reinterpret_cast<F*>(&result.x));
-			to_type<F>(q1 / permute8<4, 5, 6, 7, 4, 5, 6, 7>(q1)).store_partial(4, reinterpret_cast<F*>(&result.z));
-			return result;
-		}
+                Vector_t<T, 8> vx(to_type<T>(v.x), 0), vy(to_type<T>(v.y), 0), vz(to_type<T>(v.z), 0), vw(1);
+                Vector_t<T, 8> c0(col0, col0), c1(col1, col1), c2(col2, col2), c3(col3, col3);
 
-		template <typename F>
-		forcedinline vec3<F> transformDir(const vec3<F> v) const noexcept
-		{
-			vec3<F> result;
-			auto a = vec4<T>(v).vcl;
-			auto x = permute4<0, 0, 0, 0>(a);
-			auto y = permute4<1, 1, 1, 1>(a);
-			auto z = permute4<2, 2, 2, 2>(a);
-			to_type<F>(col0 * x + col1 * y + col2 * z).store_partial(3, &result.x);
-			return result;
-		}
+                auto r0 = c0 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vx) + c1 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vy) +
+                          c2 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vz) + c3 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vw);
+                auto r1 = c0 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vx) + c1 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vy) +
+                          c2 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vz) + c3 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vw);
 
-		template <typename F>
-		forcedinline vec4<F> transformDir(const vec4<F> v) const noexcept
-		{
-			auto a = v.withW(0).vcl;
-			auto x = permute4<0, 0, 0, 0>(a);
-			auto y = permute4<1, 1, 1, 1>(a);
-			auto z = permute4<2, 2, 2, 2>(a);
-			return to_type<F>(col0 * x + col1 * y + col2 * z);
-		}
+                auto q0 = blend8<0, 4, 8, 12, 1, 5, 9, 13>(r0, r1);
+                auto q1 = blend8<2, 6, 10, 14, 3, 7, 11, 15>(r0, r1);
 
-		template <typename F>
-		forcedinline V3_t<F, 4> transformDir(const V3_t<F, 4> v) const noexcept
-		{
-			V3_t<F, 4> result;
+                to_type<F>(q0 / permute8<4, 5, 6, 7, 4, 5, 6, 7>(q1)).store(reinterpret_cast<F*>(&result.x));
+                to_type<F>(q1 / permute8<4, 5, 6, 7, 4, 5, 6, 7>(q1)).store_partial(4, reinterpret_cast<F*>(&result.z));
+                return result;
+            }
+        }
 
-			Vector_t<T, 8> vx(to_type<T>(v.x), 0), vy(to_type<T>(v.y), 0), vz(to_type<T>(v.z), 0), vw(1);
-			Vector_t<T, 8> c0(col0, col0), c1(col1, col1), c2(col2, col2);
+        template <typename F> forcedinline vec3<F> transformDir(const vec3<F> v) const noexcept
+        {
+            const auto input = vec4<T>(T(v.x), T(v.y), T(v.z), T(0));
+            const auto result = multiply(input);
+            return {F(result.x), F(result.y), F(result.z)};
+        }
 
-			auto r0 =
-				c0 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vx) +
-				c1 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vy) +
-				c2 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vz);
-			auto r1 =
-				c0 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vx) +
-				c1 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vy) +
-				c2 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vz);
+        template <typename F> forcedinline vec4<F> transformDir(const vec4<F> v) const noexcept
+        {
+            const auto input = vec4<T>(T(v.x), T(v.y), T(v.z), T(0));
+            const auto result = multiply(input);
+            return {F(result.x), F(result.y), F(result.z), F(result.w)};
+        }
 
-			auto q0 = blend8<0, 4, 8, 12, 1, 5, 9, 13>(r0, r1);
-			auto q1 = blend8<2, 6, 10, 14, 3, 7, 11, 15>(r0, r1);
+        template <typename F> forcedinline V3_t<F, 4> transformDir(const V3_t<F, 4> v) const noexcept
+        {
+            if constexpr (!std::is_same_v<T, F>)
+            {
+                V3_t<F, 4> result;
 
-			to_type<F>(q0).store(reinterpret_cast<F*>(reinterpret_cast<F*>(&result.x)));
-			to_type<F>(q1).store_partial(4, reinterpret_cast<F*>(&result.z));
-			return result;
-		}
+                for (int index = 0; index < 4; ++index)
+                {
+                    const vec3<T> input(v.extract(index));
+                    result.insert(index, vec3<F>(transformDir(input)));
+                }
 
-		static forcedinline Matrix4 identity() { return Matrix4(1); }
-		static forcedinline Matrix4 translation(const vec3<T> pos) { return Matrix4(1).translateAbsolute(pos); }
-		static forcedinline Matrix4 translation(const vec4<T> pos) { return Matrix4(1).translateAbsolute(pos.withW(1)); }
-		static forcedinline Matrix4 rotation(T radians, const vec3<T> axis) { return Matrix4(1).rotateAbsolute(radians, axis); }
-		static forcedinline Matrix4 rotation(T radians, const vec4<T> axis) { return Matrix4(1).rotateAbsolute(radians, axis); }
-		static forcedinline Matrix4 scale(const vec3<T> s) { return Matrix4(1).scaleAbsolute(s); }
-		static forcedinline Matrix4 scale(const vec4<T> s) { return Matrix4(1).scaleAbsolute(s.withW(1)); }
-		static forcedinline Matrix4 scale(T s) { return Matrix4(1).scaleAbsolute(vec4<T>(s)); }
+                return result;
+            }
+            else
+            {
 
-		forcedinline Matrix4& setIdentity()
-		{
-			col0 = Vector_t<T, 4>{ 1, 0, 0, 0 };
-			col1 = Vector_t<T, 4>{ 0, 1, 0, 0 };
-			col2 = Vector_t<T, 4>{ 0, 0, 1, 0 };
-			col3 = Vector_t<T, 4>{ 0, 0, 0, 1 };
-			return *this;
-		};
+                V3_t<F, 4> result;
 
-		forcedinline Matrix4& setInvIdentity()
-		{
-			col0 = Vector_t<T, 4>{ -1, 0, 0, 0 };
-			col1 = Vector_t<T, 4>{ 0, -1, 0, 0 };
-			col2 = Vector_t<T, 4>{ 0, 0, -1, 0 };
-			col3 = Vector_t<T, 4>{ 0, 0, 0, -1 };
-			return *this;
-		};
+                Vector_t<T, 8> vx(to_type<T>(v.x), 0), vy(to_type<T>(v.y), 0), vz(to_type<T>(v.z), 0), vw(1);
+                Vector_t<T, 8> c0(col0, col0), c1(col1, col1), c2(col2, col2);
 
-		forcedinline vec3<T> getTranslation() const
-		{
-			vec3<T> pos;
-			col3.store_partial(3, reinterpret_cast<T*>(&pos));
-			return pos;
-		}
+                auto r0 = c0 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vx) + c1 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vy) +
+                          c2 * permute8<0, 0, 0, 0, 1, 1, 1, 1>(vz);
+                auto r1 = c0 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vx) + c1 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vy) +
+                          c2 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vz);
 
-		forcedinline vec4<T> getTranslation4() const
-		{
-			return col3;
-		}
+                auto q0 = blend8<0, 4, 8, 12, 1, 5, 9, 13>(r0, r1);
+                auto q1 = blend8<2, 6, 10, 14, 3, 7, 11, 15>(r0, r1);
 
-		forcedinline Matrix4& translateAbsolute(const vec3<T> pos)
-		{
-			col3 = Vector_t<T, 4>{ pos.x, pos.y, pos.z, 1 };
-			return *this;
-		}
+                to_type<F>(q0).store(reinterpret_cast<F*>(reinterpret_cast<F*>(&result.x)));
+                to_type<F>(q1).store_partial(4, reinterpret_cast<F*>(&result.z));
+                return result;
+            }
+        }
 
-		forcedinline Matrix4& translateAbsolute(const vec4<T> pos)
-		{
-			col3 = pos.withW(1).vcl;
-			return *this;
-		}
+        static forcedinline Matrix4 identity() { return Matrix4(1); }
+        static forcedinline Matrix4 translation(const vec3<T> pos) { return Matrix4(1).translateAbsolute(pos); }
+        static forcedinline Matrix4 translation(const vec4<T> pos) { return Matrix4(1).translateAbsolute(pos.withW(1)); }
+        static forcedinline Matrix4 rotation(T radians, const vec3<T> axis) { return Matrix4(1).rotateAbsolute(radians, axis); }
+        static forcedinline Matrix4 rotation(T radians, const vec4<T> axis) { return Matrix4(1).rotateAbsolute(radians, axis); }
+        static forcedinline Matrix4 scale(const vec3<T> s) { return Matrix4(1).scaleAbsolute(s); }
+        static forcedinline Matrix4 scale(const vec4<T> s) { return Matrix4(1).scaleAbsolute(s.withW(1)); }
+        static forcedinline Matrix4 scale(T s) { return Matrix4(1).scaleAbsolute(vec4<T>(s)); }
 
-		forcedinline Matrix4& thenTranslate(const vec3<T> t)
-		{
-			return multiply(translation(t));
-		}
+        forcedinline Matrix4& setIdentity()
+        {
+            col0 = Vector_t<T, 4>{1, 0, 0, 0};
+            col1 = Vector_t<T, 4>{0, 1, 0, 0};
+            col2 = Vector_t<T, 4>{0, 0, 1, 0};
+            col3 = Vector_t<T, 4>{0, 0, 0, 1};
+            return *this;
+        };
 
-		forcedinline Matrix4& thenTranslate(const vec4<T> t)
-		{
-			return multiply(translation(t));
-		}
+        forcedinline Matrix4& setInvIdentity()
+        {
+            col0 = Vector_t<T, 4>{-1, 0, 0, 0};
+            col1 = Vector_t<T, 4>{0, -1, 0, 0};
+            col2 = Vector_t<T, 4>{0, 0, -1, 0};
+            col3 = Vector_t<T, 4>{0, 0, 0, -1};
+            return *this;
+        };
 
-		forcedinline vec3<T> getScale() const
-		{
-			return { col0.extract(0), col1.extract(1), col2.extract(2) };
-		}
+        forcedinline vec3<T> getTranslation() const
+        {
+            vec3<T> pos;
+            col3.store_partial(3, reinterpret_cast<T*>(&pos));
+            return pos;
+        }
 
-		forcedinline vec4<T> getScale4() const
-		{
-			return { col0.extract(0), col1.extract(1), col2.extract(2), 1 };
-		}
+        forcedinline vec4<T> getTranslation4() const { return col3; }
 
-		forcedinline Matrix4& scaleAbsolute(const vec3<T> s)
-		{
-			col0.insert(0, s.x);
-			col1.insert(1, s.y);
-			col2.insert(2, s.z);
-			return *this;
-		}
+        forcedinline Matrix4& translateAbsolute(const vec3<T> pos)
+        {
+            col3 = Vector_t<T, 4>{pos.x, pos.y, pos.z, 1};
+            return *this;
+        }
 
-		forcedinline Matrix4& scaleAbsolute(const vec4<T> s)
-		{
-			col0.insert(0, s.x);
-			col1.insert(1, s.y);
-			col2.insert(2, s.z);
-			return *this;
-		}
+        forcedinline Matrix4& translateAbsolute(const vec4<T> pos)
+        {
+            col3 = pos.withW(1).vcl;
+            return *this;
+        }
 
-		forcedinline Matrix4& thenScale(const vec3<T> s)
-		{
-			return multiply(scale(s));
-		}
+        forcedinline Matrix4& thenTranslate(const vec3<T> t) { return multiply(translation(t)); }
 
-		forcedinline Matrix4& thenScale(const vec4<T> s)
-		{
-			return multiply(scale(s));
-		}
+        forcedinline Matrix4& thenTranslate(const vec4<T> t) { return multiply(translation(t)); }
 
-		forcedinline Matrix4& thenScale(T s)
-		{
-			return multiply(scale(s));
-		}
+        forcedinline vec3<T> getScale() const { return {col0.extract(0), col1.extract(1), col2.extract(2)}; }
 
-		vec3<T> getEulerRotation() const
-		{
-			vec3<T> result;
-			T c0[4], c1[4], c2[4];
-			col0.store(c0);
-			col1.store(c1);
-			col2.store(c2);
-			result.x = atan2(-c1[2], c2[2]);
-			auto cosYangle = std::sqrt(c0[0] * c0[0] + c0[1] * c0[1]);
-			result.y = atan2(c0[2], cosYangle);
-			auto sinXangle = std::sin(result.x);
-			auto cosXangle = std::cos(result.x);
-			result.z = atan2(cosXangle * c1[0] + sinXangle * c2[0], cosXangle * c1[1] + sinXangle * c2[1]);
-			return result;
-		}
+        forcedinline vec4<T> getScale4() const { return {col0.extract(0), col1.extract(1), col2.extract(2), 1}; }
 
-		vec4<T> getEulerRotation4() const
-		{
-			return vec4<T>(getEulerRotation());
-		}
+        forcedinline Matrix4& scaleAbsolute(const vec3<T> s)
+        {
+            col0.insert(0, s.x);
+            col1.insert(1, s.y);
+            col2.insert(2, s.z);
+            return *this;
+        }
 
-		Matrix4& rotateAbsolute(T radians, const vec3<T>& axis)
-		{
-			radians = -radians;
-			auto axisNorm = axis.normalized();
+        forcedinline Matrix4& scaleAbsolute(const vec4<T> s)
+        {
+            col0.insert(0, s.x);
+            col1.insert(1, s.y);
+            col2.insert(2, s.z);
+            return *this;
+        }
 
-			const auto sine = std::sin(radians);
-			const auto cosine = std::cos(radians);
-			const auto cos1 = 1 - cosine;
-			const auto u = axisNorm.x;
-			const auto v = axisNorm.y;
-			const auto w = axisNorm.z;
-			const auto u2 = u * u;
-			const auto v2 = v * v;
-			const auto w2 = w * w;
-			const auto uv1c = u * v * cos1;
-			const auto vw1c = v * w * cos1;
-			const auto uw1c = u * w * cos1;
+        forcedinline Matrix4& thenScale(const vec3<T> s) { return multiply(scale(s)); }
 
-			col0 = Vector_t<T, 4>{ u2 + (1 - u2) * cosine, uv1c + w * sine, uw1c - v * sine, 0 };
-			col1 = Vector_t<T, 4>{ uv1c - w * sine, v2 + (1 - v2) * cosine, vw1c + u * sine, 0 };
-			col2 = Vector_t<T, 4>{ uw1c + v * sine, vw1c - u * sine, w2 + (1 - w2) * cosine, 0 };
-			return *this;
-		}
+        forcedinline Matrix4& thenScale(const vec4<T> s) { return multiply(scale(s)); }
 
-		Matrix4& rotateAbsolute(T radians, const vec4<T> axis)
-		{
-			return rotateAbsolute(radians, vec3<T>(axis));
-		}
+        forcedinline Matrix4& thenScale(T s) { return multiply(scale(s)); }
 
-		forcedinline Matrix4& thenRotate(T radians, const vec3<T> axis)
-		{
-			return multiply(rotation(radians, axis));
-		}
+        vec3<T> getEulerRotation() const
+        {
+            vec3<T> result;
+            T c0[4], c1[4], c2[4];
+            col0.store(c0);
+            col1.store(c1);
+            col2.store(c2);
+            result.x = atan2(-c1[2], c2[2]);
+            auto cosYangle = std::sqrt(c0[0] * c0[0] + c0[1] * c0[1]);
+            result.y = atan2(c0[2], cosYangle);
+            auto sinXangle = std::sin(result.x);
+            auto cosXangle = std::cos(result.x);
+            result.z = atan2(cosXangle * c1[0] + sinXangle * c2[0], cosXangle * c1[1] + sinXangle * c2[1]);
+            return result;
+        }
 
-		forcedinline Matrix4& thenRotate(T radians, const vec4<T> axis)
-		{
-			return multiply(rotation(radians, axis));
-		}
+        vec4<T> getEulerRotation4() const { return vec4<T>(getEulerRotation()); }
 
-		forcedinline Matrix4& transpose()
-		{
-			if constexpr (std::is_same_v<T, float>)
-			{
-				auto tmp0 = _mm_shuffle_ps((col0), (col1), 0x44); \
-					auto tmp2 = _mm_shuffle_ps((col0), (col1), 0xEE); \
-					auto tmp1 = _mm_shuffle_ps((col2), (col3), 0x44); \
-					auto tmp3 = _mm_shuffle_ps((col2), (col3), 0xEE); \
-					(col0) = _mm_shuffle_ps(tmp0, tmp1, 0x88); \
-					(col1) = _mm_shuffle_ps(tmp0, tmp1, 0xDD); \
-					(col2) = _mm_shuffle_ps(tmp2, tmp3, 0x88); \
-					(col3) = _mm_shuffle_ps(tmp2, tmp3, 0xDD); \
-			}
+        Matrix4& rotateAbsolute(T radians, const vec3<T>& axis)
+        {
+            radians = -radians;
+            auto axisNorm = axis.normalized();
 
-			if constexpr (std::is_same_v<T, double>)
-			{
-				auto tmp0 = _mm256_shuffle_pd((col0), (col1), 0x0); \
-					auto tmp2 = _mm256_shuffle_pd((col0), (col1), 0xF); \
-					auto tmp1 = _mm256_shuffle_pd((col2), (col3), 0x0); \
-					auto tmp3 = _mm256_shuffle_pd((col2), (col3), 0xF); \
-					(col0) = _mm256_permute2f128_pd(tmp0, tmp1, 0x20); \
-					(col1) = _mm256_permute2f128_pd(tmp2, tmp3, 0x20); \
-					(col2) = _mm256_permute2f128_pd(tmp0, tmp1, 0x31); \
-					(col3) = _mm256_permute2f128_pd(tmp2, tmp3, 0x31); \
-			}
-			return *this;
-		}
+            const auto sine = std::sin(radians);
+            const auto cosine = std::cos(radians);
+            const auto cos1 = 1 - cosine;
+            const auto u = axisNorm.x;
+            const auto v = axisNorm.y;
+            const auto w = axisNorm.z;
+            const auto u2 = u * u;
+            const auto v2 = v * v;
+            const auto w2 = w * w;
+            const auto uv1c = u * v * cos1;
+            const auto vw1c = v * w * cos1;
+            const auto uw1c = u * w * cos1;
 
-		forcedinline Matrix4 transposed() const
-		{
-			return Matrix4(*this).transpose();
-		}
+            col0 = Vector_t<T, 4>{u2 + (1 - u2) * cosine, uv1c + w * sine, uw1c - v * sine, 0};
+            col1 = Vector_t<T, 4>{uv1c - w * sine, v2 + (1 - v2) * cosine, vw1c + u * sine, 0};
+            col2 = Vector_t<T, 4>{uw1c + v * sine, vw1c - u * sine, w2 + (1 - w2) * cosine, 0};
+            return *this;
+        }
 
-		forcedinline Vector_t<T, 4> multiply(Vector_t<T, 4> v) const
-		{
-			return col0 * permute4<0, 0, 0, 0>(v)
-				+ col1 * permute4<1, 1, 1, 1>(v)
-				+ col2 * permute4<2, 2, 2, 2>(v)
-				+ col3 * permute4<3, 3, 3, 3>(v);
-		}
+        Matrix4& rotateAbsolute(T radians, const vec4<T> axis) { return rotateAbsolute(radians, vec3<T>(axis)); }
 
-		forcedinline vec4<T> multiply(const vec4<T> v) const
-		{
-			return col0 * permute4<0, 0, 0, 0>(v.vcl)
-				+ col1 * permute4<1, 1, 1, 1>(v.vcl)
-				+ col2 * permute4<2, 2, 2, 2>(v.vcl)
-				+ col3 * permute4<3, 3, 3, 3>(v.vcl);
-		}
+        forcedinline Matrix4& thenRotate(T radians, const vec3<T> axis) { return multiply(rotation(radians, axis)); }
 
-		forcedinline vec4<T> multiply(vec4<T> v, T& setw) const
-		{
-			vec4<T> vec = col0 * permute4<0, 0, 0, 0>(v.vcl)
-				+ col1 * permute4<1, 1, 1, 1>(v.vcl)
-				+ col2 * permute4<2, 2, 2, 2>(v.vcl)
-				+ col3 * permute4<3, 3, 3, 3>(v.vcl);
+        forcedinline Matrix4& thenRotate(T radians, const vec4<T> axis) { return multiply(rotation(radians, axis)); }
 
-			vec.w = setw;
-			return vec;
-		}
+        forcedinline Matrix4& transpose()
+        {
+            if constexpr (std::is_same_v<T, float>)
+            {
+                auto tmp0 = _mm_shuffle_ps((col0), (col1), 0x44);
+                auto tmp2 = _mm_shuffle_ps((col0), (col1), 0xEE);
+                auto tmp1 = _mm_shuffle_ps((col2), (col3), 0x44);
+                auto tmp3 = _mm_shuffle_ps((col2), (col3), 0xEE);
+                (col0) = _mm_shuffle_ps(tmp0, tmp1, 0x88);
+                (col1) = _mm_shuffle_ps(tmp0, tmp1, 0xDD);
+                (col2) = _mm_shuffle_ps(tmp2, tmp3, 0x88);
+                (col3) = _mm_shuffle_ps(tmp2, tmp3, 0xDD);
+            }
 
-		forcedinline Matrix4& multiply(const Matrix4& other)
-		{
-			*this = {
-				multiply(other.col0),
-				multiply(other.col1),
-				multiply(other.col2),
-				multiply(other.col3)
-			};
-			return *this;
-		}
+            if constexpr (std::is_same_v<T, double>)
+            {
+                auto tmp0 = _mm256_shuffle_pd((col0), (col1), 0x0);
+                auto tmp2 = _mm256_shuffle_pd((col0), (col1), 0xF);
+                auto tmp1 = _mm256_shuffle_pd((col2), (col3), 0x0);
+                auto tmp3 = _mm256_shuffle_pd((col2), (col3), 0xF);
+                (col0) = _mm256_permute2f128_pd(tmp0, tmp1, 0x20);
+                (col1) = _mm256_permute2f128_pd(tmp2, tmp3, 0x20);
+                (col2) = _mm256_permute2f128_pd(tmp0, tmp1, 0x31);
+                (col3) = _mm256_permute2f128_pd(tmp2, tmp3, 0x31);
+            }
+            return *this;
+        }
 
-		forcedinline Matrix4 multipliedWith(const Matrix4& other) const
-		{
-			return Matrix4(*this).multiply(other);
-		}
+        forcedinline Matrix4 transposed() const { return Matrix4(*this).transpose(); }
 
-		Matrix4 inversedNoScale() const
-		{
-			Matrix4 r;
-			auto t0 = blend4<0, 1, 4, 5>(col0, col1);
-			auto t1 = blend4<2, 3, 6, 7>(col0, col1);
-			r.col0 = blend4<0, 2, 4, 7>(t0, col2);
-			r.col1 = blend4<1, 3, 5, 7>(t0, col2);
-			r.col2 = blend4<0, 2, 6, 7>(t1, col2);
-			r.col3 = mul_add(r.col0, permute4<0, 0, 0, 0>(col3), mul_add(r.col1, permute4<1, 1, 1, 1>(col3), r.col2 * permute4<2, 2, 2, 2>(col3)));
-			r.col3 = Vector_t<T, 4>{ 0, 0, 0, 1 } - r.col3;
-			return r;
-		}
+        forcedinline Vector_t<T, 4> multiply(Vector_t<T, 4> v) const
+        {
+            return col0 * permute4<0, 0, 0, 0>(v) + col1 * permute4<1, 1, 1, 1>(v) + col2 * permute4<2, 2, 2, 2>(v) +
+                   col3 * permute4<3, 3, 3, 3>(v);
+        }
 
-		Matrix4& inverseNoScale()
-		{
-			*this = inversedNoScale();
-			return *this;
-		}
+        forcedinline vec4<T> multiply(const vec4<T> v) const
+        {
+            return col0 * permute4<0, 0, 0, 0>(v.vcl) + col1 * permute4<1, 1, 1, 1>(v.vcl) + col2 * permute4<2, 2, 2, 2>(v.vcl) +
+                   col3 * permute4<3, 3, 3, 3>(v.vcl);
+        }
 
-		Matrix4 inversed() const
-		{
-			Matrix4 r;
-			auto t0 = blend4<0, 1, 4, 5>(col0, col1);
-			auto t1 = blend4<2, 3, 6, 7>(col0, col1);
-			r.col0 = blend4<0, 2, 4, 7>(t0, col2);
-			r.col1 = blend4<1, 3, 5, 7>(t0, col2);
-			r.col2 = blend4<0, 2, 6, 7>(t1, col2);
-			auto sizeSqr = r.col0 * r.col0 + r.col1 * r.col1 + r.col2 * r.col2;
-			auto rSizeSqr = select(sizeSqr > 0.0f, 1.0f / sizeSqr, 1.0f);
-			r.col0 *= rSizeSqr;
-			r.col1 *= rSizeSqr;
-			r.col2 *= rSizeSqr;
-			r.col3 = r.col0 * permute4<0, 0, 0, 0>(col3) + r.col1 * permute4<1, 1, 1, 1>(col3) + r.col2 * permute4<2, 2, 2, 2>(col3);
-			r.col3 = Vector_t<T, 4>{ 0, 0, 0, 1 } - r.col3;
-			return r;
-		}
+        forcedinline vec4<T> multiply(vec4<T> v, T& setw) const
+        {
+            vec4<T> vec = col0 * permute4<0, 0, 0, 0>(v.vcl) + col1 * permute4<1, 1, 1, 1>(v.vcl) + col2 * permute4<2, 2, 2, 2>(v.vcl) +
+                          col3 * permute4<3, 3, 3, 3>(v.vcl);
 
-		Matrix4& inverse()
-		{
-			*this = inversed();
-			return *this;
-		}
+            vec.w = setw;
+            return vec;
+        }
 
-		Matrix4& rotationAlign(const vec3<T> d, const vec3<T> z)
-		{
-			const auto v = z.cross(d);
-			const auto c = z.dot(d);
-			const auto k = 1.0f / (1.0f + c);
-			col0 = Vector_t<T, 4>{ v.x * v.x * k + c, v.x * v.y * k + v.z, v.x * v.z * k - v.y, 0 };
-			col1 = Vector_t<T, 4>{ v.y * v.x * k - v.z, v.y * v.y * k + c, v.y * v.z * k + v.x, 0 };
-			col2 = Vector_t<T, 4>{ v.z * v.x * k + v.y, v.z * v.y * k - v.x, v.z * v.z * k + c, 0 };
-			col3 = Vector_t<T, 4>{ 0, 0, 0, 1 };
-			return *this;
-		}
+        forcedinline Matrix4& multiply(const Matrix4& other)
+        {
+            *this = {multiply(other.col0), multiply(other.col1), multiply(other.col2), multiply(other.col3)};
+            return *this;
+        }
 
-		/*
+        forcedinline Matrix4 multipliedWith(const Matrix4& other) const { return Matrix4(*this).multiply(other); }
+
+        Matrix4 inversedNoScale() const
+        {
+            Matrix4 r;
+            auto t0 = blend4<0, 1, 4, 5>(col0, col1);
+            auto t1 = blend4<2, 3, 6, 7>(col0, col1);
+            r.col0 = blend4<0, 2, 4, 7>(t0, col2);
+            r.col1 = blend4<1, 3, 5, 7>(t0, col2);
+            r.col2 = blend4<0, 2, 6, 7>(t1, col2);
+            r.col3 = mul_add(
+                r.col0, permute4<0, 0, 0, 0>(col3), mul_add(r.col1, permute4<1, 1, 1, 1>(col3), r.col2 * permute4<2, 2, 2, 2>(col3)));
+            r.col3 = Vector_t<T, 4>{0, 0, 0, 1} - r.col3;
+            return r;
+        }
+
+        Matrix4& inverseNoScale()
+        {
+            *this = inversedNoScale();
+            return *this;
+        }
+
+        Matrix4 inversed() const
+        {
+            Matrix4 r;
+            auto t0 = blend4<0, 1, 4, 5>(col0, col1);
+            auto t1 = blend4<2, 3, 6, 7>(col0, col1);
+            r.col0 = blend4<0, 2, 4, 7>(t0, col2);
+            r.col1 = blend4<1, 3, 5, 7>(t0, col2);
+            r.col2 = blend4<0, 2, 6, 7>(t1, col2);
+            auto sizeSqr = r.col0 * r.col0 + r.col1 * r.col1 + r.col2 * r.col2;
+            auto rSizeSqr = select(sizeSqr > 0.0f, 1.0f / sizeSqr, 1.0f);
+            r.col0 *= rSizeSqr;
+            r.col1 *= rSizeSqr;
+            r.col2 *= rSizeSqr;
+            r.col3 = r.col0 * permute4<0, 0, 0, 0>(col3) + r.col1 * permute4<1, 1, 1, 1>(col3) + r.col2 * permute4<2, 2, 2, 2>(col3);
+            r.col3 = Vector_t<T, 4>{0, 0, 0, 1} - r.col3;
+            return r;
+        }
+
+        Matrix4& inverse()
+        {
+            *this = inversed();
+            return *this;
+        }
+
+        Matrix4& rotationAlign(const vec3<T> d, const vec3<T> z)
+        {
+            const auto v = z.cross(d);
+            const auto c = z.dot(d);
+            const auto k = 1.0f / (1.0f + c);
+            col0 = Vector_t<T, 4>{v.x * v.x * k + c, v.x * v.y * k + v.z, v.x * v.z * k - v.y, 0};
+            col1 = Vector_t<T, 4>{v.y * v.x * k - v.z, v.y * v.y * k + c, v.y * v.z * k + v.x, 0};
+            col2 = Vector_t<T, 4>{v.z * v.x * k + v.y, v.z * v.y * k - v.x, v.z * v.z * k + c, 0};
+            col3 = Vector_t<T, 4>{0, 0, 0, 1};
+            return *this;
+        }
+
+        /*
 		* Takes two vec4 and calls rotationAlign(vec3, vec3) using their xyz components.
 		* The w-components will be ignored to prevent matrix drift caused when w != 0.
 		*/
-		Matrix4& rotationAlign4(const vec4<T> d, const vec4<T> z)
-		{
-			return rotationAlign(d, z);
-		}
+        Matrix4& rotationAlign4(const vec4<T> d, const vec4<T> z) { return rotationAlign(d, z); }
 
-		Vector_t<T, 4>& column(int i) { return col[i & 3]; }
+        Vector_t<T, 4>& column(int i) { return col[i & 3]; }
 
-		union
-		{
-			struct { Vector_t<T, 4> col0, col1, col2, col3; };
-			Vector_t<T, 4> col[4];
-		};
-	};
+        union
+        {
+            struct
+            {
+                Vector_t<T, 4> col0, col1, col2, col3;
+            };
+            Vector_t<T, 4> col[4];
+        };
+    };
 
-	using Matrix4f = Matrix4<float>;
-	using Matrix4d = Matrix4<double>;
+    using Matrix4f = Matrix4<float>;
+    using Matrix4d = Matrix4<double>;
 #endif //Matrix4
 
-	//Quaternion online verification tool https://tools.glowbuzzer.com/rotationconverter
-	template <typename T = float>
-	class Quaternion
-	{
-	public:
-		union
-		{
-			vec4<T> q;  // (x, y, z, w), with w as scalar part
-			struct { T x, y, z, w; };
-		};
+#if defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
+    //Quaternion online verification tool https://tools.glowbuzzer.com/rotationconverter
+    template <typename T = float> class Quaternion
+    {
+    public:
+        union
+        {
+            vec4<T> q; // (x, y, z, w), with w as scalar part
+            struct
+            {
+                T x, y, z, w;
+            };
+        };
 
-		// Constructors
-		Quaternion() : q(vec4<T>(0, 0, 0, 1)) {}
-		Quaternion(const vec4<T>& v) : q(v) {}
-		Quaternion(T x, T y, T z, T w) : q(vec4<T>(x, y, z, w)) {}
-		Quaternion(const Quaternion& quat) : q(quat.q) {}
+        // Constructors
+        Quaternion() : q(vec4<T>(0, 0, 0, 1)) {}
+        Quaternion(const vec4<T>& v) : q(v) {}
+        Quaternion(T x, T y, T z, T w) : q(vec4<T>(x, y, z, w)) {}
+        Quaternion(const Quaternion& quat) : q(quat.q) {}
 
-		// Static factory: from axis-angle (axis must be normalized, angle in radians)
-		forcedinline static Quaternion fromAxisAngle(const vec4<T>& axis, T angle)
-		{
-			vec4<T> s(std::sin(angle * T(0.5)));
-			vec4<T> c(std::cos(angle * T(0.5)));
-			vec4<T> xyz(axis * s);
+        // Static factory: from axis-angle (axis must be normalized, angle in radians)
+        forcedinline static Quaternion fromAxisAngle(const vec4<T>& axis, T angle)
+        {
+            T sine;
+            T cosine;
 
-			return Quaternion(vec4<T>(xyz.x, xyz.y, xyz.z, c.x));
-		}
+            if constexpr (std::is_arithmetic_v<T>)
+            {
+                sine = std::sin(angle * T(0.5));
+                cosine = std::cos(angle * T(0.5));
+            }
+            else
+            {
+                for (int index = 0; index < static_cast<int>(elements_v<T>); ++index)
+                {
+                    const auto halfAngle = angle.extract(index) * Scalar_t<T>(0.5);
+                    sine.insert(index, std::sin(halfAngle));
+                    cosine.insert(index, std::cos(halfAngle));
+                }
+            }
 
-		// Normalize this quaternion to unit length, uses vec4.normalize()
-		forcedinline Quaternion& normalize() noexcept { q.normalize(); return *this; }
-		forcedinline Quaternion normalized() const noexcept { return q.normalized(); }
-		forcedinline Quaternion& normalizex() noexcept { q.normalizex(); return *this; }
-		forcedinline Quaternion normalizedx() const noexcept { return q.normalizedx(); }
+            return Quaternion(axis.x * sine, axis.y * sine, axis.z * sine, cosine);
+        }
 
-		// Quaternion multiplication: this = this * other
-		forcedinline Quaternion<T> operator*(const Quaternion<T>& other) const
-		{
-			vec4<T> res;
-			res.x = w * other.x + x * other.w + y * other.z - z * other.y;
-			res.y = w * other.y - x * other.z + y * other.w + z * other.x;
-			res.z = w * other.z + x * other.y - y * other.x + z * other.w;
-			res.w = w * other.w - x * other.x - y * other.y - z * other.z;
-			return Quaternion(res);
-		}
-
-		vec4<T> operator*(const vec4<T>& vec) const {
-			// Treat vector as quaternion (x,y,z,0)
-			Quaternion qvec(vec.x, vec.y, vec.z, T(0.0));
-
-			// Multiply: this * qvec * inverse(this)
-			Quaternion res = (*this) * qvec * this->inverse();
-
-			// Return rotated vector (x,y,z,0)
-			return res.q;
-		}
-
-		forcedinline Quaternion& operator=(const Quaternion& other)
-		{
-			q = other.q;
-			return *this;
-		}
-
-		// Rotate a vec4 (as 3D vector in xyzw) by this quaternion
-		// 1 million calls (microseconds)
-		// AVX2 ~2000, AVX ~2400, SSE2 ~2400, SSE ~2400
-		// https://blog.molecular-matters.com/2013/05/24/a-faster-quaternion-vector-multiplication/
-		forcedinline vec4<T> rotateSSE2(const vec4<T>& vec) const
-		{
-			vec4<T> qv(x, y, z, T(0.0));
-			vec4<T> v = T(2.0) * qv.cross(vec);
-			vec4<T> vp = vec + w * v + qv.cross(v);
-			return vp;
-		}
-
-		// Rotate a vec4 (as 3D vector in xyzw) by this quaternion
-		// 1 million calls (microseconds)
-		// AVX2 ~1300, AVX ~1300, SSE2 ~21000, SSE ~1300 (SSE2 is a mystery)
-		// https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
-		forcedinline vec4<T> rotate(const vec4<T>& vec) const
-		{
-			vec4<T> qv(x, y, z, T(0.0));
-			vec4<T> vp = T(2.0) * qv.dot(vec) * qv + (T(2.0) * q.w * q.w - T(1.0)) * vec + T(2.0) * q.w * qv.cross(vec);
-			return vp;
-		}
-
-		// Inverse of unit quaternion
-		forcedinline Quaternion inverseUnitQ() const
-		{
-			return Quaternion(-x, -y, -z, w);
-		}
-
-		// Inverse of a non-unit quaternion
-		forcedinline Quaternion inverse() const
-		{
-			vec4<T> conj(-q.x, -q.y, -q.z, q.w);
-			vec4<T> sq = q * q;
-			T l2 = sq.x + sq.y + sq.z + sq.w;
-			return Quaternion(conj / vec4<T>(l2));
-		}
-
-		//Convert quaternion to 3×3 rotation matrix (aligned with VCL usage)
-		//Mat3f toRotationMatrix() const 
-		// {
-		//    
-		//    T xx = v.x * v.x;
-		//    T yy = v.y * v.y;
-		//    T zz = v.z * v.z;
-		//    T xy = v.x * v.y;
-		//    T xz = v.x * v.z;
-		//    T yz = v.y * v.z;
-		//    T wx = v.w * v.x;
-		//    T wy = v.w * v.y;
-		//    T wz = v.w * v.z;
-
-		//    Mat3f m;
-		//    m.rows[0] = Vec3f(1.0f - 2.0f * (yy + zz), 2.0f * (xy - wz), 2.0f * (xz + wy));
-		//    m.rows[1] = Vec3f(2.0f * (xy + wz), 1.0f - 2.0f * (xx + zz), 2.0f * (yz - wx));
-		//    m.rows[2] = Vec3f(2.0f * (xz - wy), 2.0f * (yz + wx), 1.0f - 2.0f * (xx + yy));
-
-		//    return m;
-		//}
-
-		// Spherical linear interpolation from *this to target
-		forcedinline Quaternion& slerp(const Quaternion<T>& target, T t)
-		{
-			vec4<T> cosphi = q * target.q;
-			T dot = cosphi.x + cosphi.y + cosphi.z + cosphi.w;
-
-			Quaternion qb2 = target;
-			if (dot < 0.0f) {  // invert to take shortest path
-				dot = -dot;
-				qb2.q = -qb2.q;
-			}
-
-			const T DOT_THRESHOLD = 0.9995f;
-			if (dot > DOT_THRESHOLD) {
-				// Linear fallback
-            q = q + (qb2.q - q) * vec4<T>(t);
-            normalize();
+        // Normalize this quaternion to unit length, uses vec4.normalize()
+        forcedinline Quaternion& normalize() noexcept
+        {
+            q.normalize();
             return *this;
-			}
+        }
+        forcedinline Quaternion normalized() const noexcept { return q.normalized(); }
+        forcedinline Quaternion& normalizex() noexcept
+        {
+            q.normalizex();
+            return *this;
+        }
+        forcedinline Quaternion normalizedx() const noexcept { return q.normalizedx(); }
 
-			T theta_0 = std::acos(dot);
-			T theta = theta_0 * t;
-			T sin_theta = std::sin(theta), sin_theta_0 = std::sin(theta_0);
+        // Quaternion multiplication: this = this * other
+        forcedinline Quaternion<T> operator*(const Quaternion<T>& other) const
+        {
+            vec4<T> res;
+            res.x = w * other.x + x * other.w + y * other.z - z * other.y;
+            res.y = w * other.y - x * other.z + y * other.w + z * other.x;
+            res.z = w * other.z + x * other.y - y * other.x + z * other.w;
+            res.w = w * other.w - x * other.x - y * other.y - z * other.z;
+            return Quaternion(res);
+        }
 
-			vec4<T> s0(std::cos(theta) - dot * sin_theta / sin_theta_0);
-			vec4<T> s1(sin_theta / sin_theta_0);
+        vec4<T> operator*(const vec4<T>& vec) const
+        {
+            // Treat vector as quaternion (x,y,z,0)
+            Quaternion qvec(vec.x, vec.y, vec.z, T(0.0));
 
-			vec4<T> res(q * s0 + qb2.q * s1);
-			q = res;
-			q.normalize();
-			return *this;
-		}
+            // Multiply: this * qvec * inverse(this)
+            Quaternion res = (*this) * qvec * this->inverse();
 
-		// Spherical linear interpolation from a to b
-		forcedinline static Quaternion slerp(const Quaternion<T>& a, const Quaternion<T>& b, T t)
-		{
-			vec4<T> cosphi = a.q * b.q;
-			T dot = cosphi.x + cosphi.y + cosphi.z + cosphi.w;
+            // Return rotated vector (x,y,z,0)
+            return res.q;
+        }
 
-			Quaternion qb2 = b;
-			if (dot < 0.0f) {  // invert to take shortest path
-				dot = -dot;
-				qb2.q = -qb2.q;
-			}
+        forcedinline Quaternion& operator=(const Quaternion& other)
+        {
+            q = other.q;
+            return *this;
+        }
 
-			const T DOT_THRESHOLD = 0.9995f;
-			if (dot > DOT_THRESHOLD) {
-				// Linear fallback
-				vec4<T> vl(a.q + (qb2.q - a.q) * vec4<T>(t));
-				Quaternion result(vl);
-				result.normalize();
-				return result;
-			}
+        // Rotate a vec4 (as 3D vector in xyzw) by this quaternion
+        // 1 million calls (microseconds)
+        // AVX2 ~2000, AVX ~2400, SSE2 ~2400, SSE ~2400
+        // https://blog.molecular-matters.com/2013/05/24/a-faster-quaternion-vector-multiplication/
+        forcedinline vec4<T> rotateSSE2(const vec4<T>& vec) const
+        {
+            vec4<T> qv(x, y, z, T(0.0));
+            vec4<T> v = T(2.0) * qv.cross(vec);
+            vec4<T> vp = vec + w * v + qv.cross(v);
+            return vp;
+        }
 
-			T theta_0 = std::acos(dot);
-			T theta = theta_0 * t;
-			T sin_theta = std::sin(theta), sin_theta_0 = std::sin(theta_0);
+        // Rotate a vec4 (as 3D vector in xyzw) by this quaternion
+        // 1 million calls (microseconds)
+        // AVX2 ~1300, AVX ~1300, SSE2 ~21000, SSE ~1300 (SSE2 is a mystery)
+        // https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
+        forcedinline vec4<T> rotate(const vec4<T>& vec) const
+        {
+            vec4<T> qv(x, y, z, T(0.0));
+            vec4<T> vp = T(2.0) * qv.dot(vec) * qv + (T(2.0) * q.w * q.w - T(1.0)) * vec + T(2.0) * q.w * qv.cross(vec);
+            return vp;
+        }
 
-			vec4<T> s0(std::cos(theta) - dot * sin_theta / sin_theta_0);
-			vec4<T> s1(sin_theta / sin_theta_0);
+        // Inverse of unit quaternion
+        forcedinline Quaternion inverseUnitQ() const { return Quaternion(-x, -y, -z, w); }
 
-			vec4<T> res(a.q * s0 + qb2.q * s1);
-			Quaternion result(res);
-			result.normalize();
-			return result;
-		}
-	};
+        // Inverse of a non-unit quaternion
+        forcedinline Quaternion inverse() const
+        {
+            vec4<T> conj(-q.x, -q.y, -q.z, q.w);
+            vec4<T> sq = q * q;
+            T l2 = sq.x + sq.y + sq.z + sq.w;
+            return Quaternion(conj / vec4<T>(l2));
+        }
 
-	using Quatf = dex::Quaternion<float>;
-	using Quatd = dex::Quaternion<double>;
+        //Convert quaternion to 3×3 rotation matrix (aligned with VCL usage)
+        //Mat3f toRotationMatrix() const
+        // {
+        //
+        //    T xx = v.x * v.x;
+        //    T yy = v.y * v.y;
+        //    T zz = v.z * v.z;
+        //    T xy = v.x * v.y;
+        //    T xz = v.x * v.z;
+        //    T yz = v.y * v.z;
+        //    T wx = v.w * v.x;
+        //    T wy = v.w * v.y;
+        //    T wz = v.w * v.z;
+
+        //    Mat3f m;
+        //    m.rows[0] = Vec3f(1.0f - 2.0f * (yy + zz), 2.0f * (xy - wz), 2.0f * (xz + wy));
+        //    m.rows[1] = Vec3f(2.0f * (xy + wz), 1.0f - 2.0f * (xx + zz), 2.0f * (yz - wx));
+        //    m.rows[2] = Vec3f(2.0f * (xz - wy), 2.0f * (yz + wx), 1.0f - 2.0f * (xx + yy));
+
+        //    return m;
+        //}
+
+        // Spherical linear interpolation from *this to target
+        forcedinline Quaternion& slerp(const Quaternion<T>& target, T t)
+        {
+            *this = slerp(*this, target, t);
+            return *this;
+        }
+
+        // Spherical linear interpolation from a to b
+        forcedinline static Quaternion slerp(const Quaternion<T>& a, const Quaternion<T>& b, T t)
+        {
+            if constexpr (!std::is_arithmetic_v<T>)
+            {
+                Quaternion result;
+
+                for (int index = 0; index < static_cast<int>(elements_v<T>); ++index)
+                {
+                    using ScalarQuaternion = Quaternion<Scalar_t<T>>;
+                    const ScalarQuaternion first(a.q.extract(index));
+                    const ScalarQuaternion second(b.q.extract(index));
+                    result.q.insert(index, ScalarQuaternion::slerp(first, second, t.extract(index)).q);
+                }
+
+                return result;
+            }
+            else
+            {
+                T dot = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+                Quaternion target = b;
+
+                if (dot < T(0))
+                {
+                    dot = -dot;
+                    target.q = -target.q;
+                }
+
+                dot = std::clamp(dot, T(-1), T(1));
+
+                if (dot > T(0.9995))
+                {
+                    Quaternion result(a.q + (target.q - a.q) * vec4<T>(t));
+                    return result.normalized();
+                }
+
+                const T initialAngle = std::acos(dot);
+                const T angle = initialAngle * t;
+                const T sine = std::sin(angle);
+                const T initialSine = std::sin(initialAngle);
+                const T firstWeight = std::cos(angle) - dot * sine / initialSine;
+                const T secondWeight = sine / initialSine;
+                Quaternion result(a.q * vec4<T>(firstWeight) + target.q * vec4<T>(secondWeight));
+                return result.normalized();
+            }
+        }
+    };
+
+    using Quatf = dex::Quaternion<float>;
+    using Quatd = dex::Quaternion<double>;
+#endif // Quaternion
 
 	//  1 out, 1 in...
 	template <typename T>
@@ -3334,13 +4737,13 @@ namespace dex
 	//  1 out, 2 in...
 	template <typename T>
 	static forcedinline T hash12(const vec2<T> p)
-	{
-		vec3<T> p3 = fract(vec3<T>(p.xyx()) * T(0.1031f));
-		p3 += p3.dot(p3.yzx() + T(33.33f));
-		return fract((p3.x + p3.y) * p3.z);
-	}
+    {
+        vec3<T> p3 = fract(vec3<T>(p.x, p.y, p.x) * T(0.1031f));
+        p3 += p3.dot(p3.yzx() + T(33.33f));
+        return fract((p3.x + p3.y) * p3.z);
+    }
 
-	//  2 out, 1 in...
+    //  2 out, 1 in...
 	template <typename T>
 	static forcedinline vec2<T> hash21(T p)
 	{
@@ -3353,14 +4756,13 @@ namespace dex
 	//  2 out, 2 in...
 	template <typename T>
 	static forcedinline vec2<T> hash22(const vec2<T> p)
-	{
-		vec3<T> p3 = fract(vec3<T>(p.xyx()) * vec3<T>(T(0.1031f), T(0.1030f), T(0.0973f)));
-		p3 += p3.dot(p3.yzx() + T(33.33f));
-		return fract((p3.xx() + p3.yz()) * p3.zy());
+    {
+        vec3<T> p3 = fract(vec3<T>(p.x, p.y, p.x) * vec3<T>(T(0.1031f), T(0.1030f), T(0.0973f)));
+        p3 += p3.dot(p3.yzx() + T(33.33f));
+        return fract((p3.xx() + p3.yz()) * p3.zy());
+    }
 
-	}
-
-	//  2 out, 3 in...
+    //  2 out, 3 in...
 	template <typename T>
 	static forcedinline vec2<T> hash23(const vec3<T> p)
 	{
@@ -3372,11 +4774,11 @@ namespace dex
 	//  3 out, 2 in...
 	template <typename T>
 	static forcedinline vec3<T> hash32(const vec2<T> p)
-	{
-		vec3<T> p3 = fract(vec3<T>(p.x, p.y, p.x) * vec3<T>(T(0.1031f), T(0.1030f), T(0.0973f)));
-		p3 += p3.dot(p3.yxz() + T(33.33f));
-		return fract((p3.xxy() + p3.yzz()) * p3.zyx());
-	}
+    {
+        vec3<T> p3 = fract(vec3<T>(p.x, p.y, p.x) * vec3<T>(T(0.1031f), T(0.1030f), T(0.0973f)));
+        p3 += p3.dot(p3.yxz() + T(33.33f));
+        return fract((p3.xxy() + p3.yzz()) * p3.zyx());
+    }
 #endif
 
 #if defined(GFXMATH_VEC2) && defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
