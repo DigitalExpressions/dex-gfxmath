@@ -28,7 +28,7 @@ const float distance = position.length();
 
 ## Standalone tests
 
-The CMake/CTest build provides `gfxmath_tests` and `fastmath_tests`. On Windows,
+The CMake/CTest build provides `gfxmath_tests`, `gfxmath_sign_tests`, and `fastmath_tests`. On Windows,
 run from this repository:
 
 ```powershell
@@ -46,12 +46,14 @@ the sibling `vectorclass` directory and standard include locations. Otherwise,
 with `GFXMATH_FETCH_VECTORCLASS=ON`
 (the default), it fetches VCL at the pinned commit in `CMakeLists.txt`.
 
-Both test executables target AVX2 and require an AVX2-capable CPU. Checks remain
+All test executables target AVX2 and require an AVX2-capable CPU. Checks remain
 active in Release independently of `assert`/`NDEBUG`.
 
 `gfxmath.unit` exercises float/double and all supported packed member widths:
 float4/8/16 and double2/4/8. VCL emulates the largest widths on this target.
 All advertised feature macros also have standalone compilation smoke targets.
+`gfxmath.sign` checks scalar and SIMD sign results, including signed zero and
+scalar NaN behavior. Its MSVC build treats narrowing warning C4244 as an error.
 `fastmath.unit` tests the standalone FastMath header without linking GfxMath or
 VCL, using varied SSE lanes and standard-library numerical references. To run
 only that suite, append `-R fastmath.unit` to either CTest command above.

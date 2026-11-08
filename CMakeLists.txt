@@ -45,6 +45,20 @@ if(BUILD_TESTING)
     add_test(NAME gfxmath.unit COMMAND gfxmath_tests)
     set_tests_properties(gfxmath.unit PROPERTIES LABELS "unit;simd" TIMEOUT 60)
 
+    # Keep the sign regression focused: the broad suite also exercises intentional
+    # narrowing conversions in vector constructors and test inputs.
+    add_executable(gfxmath_sign_tests tests/SignConversionTests.cpp)
+    target_link_libraries(gfxmath_sign_tests PRIVATE DEXGfxMath)
+
+    if(MSVC)
+        target_compile_options(gfxmath_sign_tests PRIVATE /arch:AVX2 /W4 /we4244)
+    else()
+        target_compile_options(gfxmath_sign_tests PRIVATE -mavx2 -mfma -Wall -Wextra)
+    endif()
+
+    add_test(NAME gfxmath.sign COMMAND gfxmath_sign_tests)
+    set_tests_properties(gfxmath.sign PROPERTIES LABELS "unit;simd;conversion" TIMEOUT 60)
+
     add_executable(fastmath_tests tests/FastMathTests.cpp)
     target_compile_features(fastmath_tests PRIVATE cxx_std_20)
     target_include_directories(fastmath_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/Source")

@@ -5027,7 +5027,7 @@ namespace dex
     /// lane-wise.
     template <typename T> forcedinline const T sign(const T& v) noexcept
     {
-        return select(v < 0, -1, 1);
+        return select(v < 0, T(-1), T(1));
     }
 
 #if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
