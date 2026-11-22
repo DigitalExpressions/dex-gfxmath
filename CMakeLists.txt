@@ -45,8 +45,7 @@ if(BUILD_TESTING)
     add_test(NAME gfxmath.unit COMMAND gfxmath_tests)
     set_tests_properties(gfxmath.unit PROPERTIES LABELS "unit;simd" TIMEOUT 60)
 
-    # Keep the sign regression focused: the broad suite also exercises intentional
-    # narrowing conversions in vector constructors and test inputs.
+    # Keep standalone coverage for narrowing conversions in the sign API.
     add_executable(gfxmath_sign_tests tests/SignConversionTests.cpp)
     target_link_libraries(gfxmath_sign_tests PRIVATE DEXGfxMath)
 

@@ -297,7 +297,7 @@ namespace FT
     /// @note The bound-oriented name is not a universal conservative certificate.
     static forcedinline double exp_fast_lb(double a) {
         union { double d; long long x; } u;
-        u.x = (long long)(6497320848556798LL * a + 4606794787981043020);
+        u.x = (long long)(6497320848556798LL * a + double(4606794787981043020));
         return u.d;
     }
 
@@ -309,7 +309,7 @@ namespace FT
     /// @note The bound-oriented name is not a universal conservative certificate.
     static forcedinline double exp_fast_ub(double a) {
         union { double d; long long x; } u;
-        u.x = (long long)(6497320848556798LL * a + 4607182418800017409);
+        u.x = (long long)(6497320848556798LL * a + double(4607182418800017409));
         return u.d;
     }
 
@@ -319,7 +319,7 @@ namespace FT
     /// @pre Integer conversion and constructed floating representations must remain in positive normal ranges.
     static forcedinline double exp_fast(double a) {
         union { double d; long long x; } u;
-        u.x = (long long)(6497320848556798LL * a + 0x3fef127e83d16f12LL);
+        u.x = (long long)(6497320848556798LL * a + double(0x3fef127e83d16f12LL));
         return u.d;
     }
 
@@ -330,8 +330,8 @@ namespace FT
     /// Both approximate operands and their quotient must remain finite and meaningful.
     static forcedinline double better_exp_fast(double a) {
         union { double d; long long x; } u, v;
-        u.x = (long long)(3248660424278399LL * a + 0x3fdf127e83d16f12LL);
-        v.x = (long long)(0x3fdf127e83d16f12LL - 3248660424278399LL * a);
+        u.x = (long long)(3248660424278399LL * a + double(0x3fdf127e83d16f12LL));
+        v.x = (long long)(double(0x3fdf127e83d16f12LL) - 3248660424278399LL * a);
         return u.d / v.d;
     }
 
@@ -355,7 +355,7 @@ namespace FT
     /// @note The bound-oriented name is not a universal conservative certificate.
     static forcedinline float expf_fast_ub(float a) {
         union { float f; int x; } u;
-        u.x = (int)(12102203 * a + 1065353217);
+        u.x = (int)(12102203 * a + float(1065353217));
         return u.f;
     }
 
@@ -367,7 +367,7 @@ namespace FT
     /// @pre Integer conversion and constructed floating representations must remain in positive normal ranges.
     static forcedinline float expf_fast(float a) {
         union { float f; int x; } u;
-        u.x = (int)(12102203 * a + 1064866805);
+        u.x = (int)(12102203 * a + float(1064866805));
         return u.f;
     }
 
@@ -379,8 +379,8 @@ namespace FT
     /// Both approximate operands and their quotient must remain finite and meaningful.
     static forcedinline double better_expf_fast(float a) {
         union { float f; int x; } u, v;
-        u.x = (long long)(6051102 * a + 1056478197);
-        v.x = (long long)(1056478197 - 6051102 * a);
+        u.x = (long long)(6051102 * a + float(1056478197));
+        v.x = (long long)(float(1056478197) - 6051102 * a);
         return u.f / v.f;
     }
 
@@ -392,7 +392,7 @@ namespace FT
     /// @note The bound-oriented name is not a universal conservative certificate.
     static forcedinline float expf_fast_lb(float a) {
         union { float f; int x; } u;
-        u.x = (int)(12102203 * a + 1064631197);
+        u.x = (int)(12102203 * a + float(1064631197));
         return u.f;
     }
 
@@ -499,7 +499,7 @@ namespace FT
     /// @pre Encoded representations, intermediate products, and any reciprocal must remain finite and in range.
     static forcedinline float powf_fast(float a, float b) {
         union { float d; int x; } u = { a };
-        u.x = (int)(b * (u.x - 1064866805) + 1064866805);
+        u.x = (int)(b * (u.x - 1064866805) + float(1064866805));
         return u.d;
     }
 
@@ -511,7 +511,7 @@ namespace FT
     /// @note Lower/upper naming does not promise bounds for negative exponents or all rounding cases.
     static forcedinline float powf_fast_lb(float a, float b) {
         union { float d; int x; } u = { a };
-        u.x = (int)(b * (u.x - 1065353217) + 1064631197);
+        u.x = (int)(b * (u.x - 1065353217) + float(1064631197));
         return u.d;
     }
 
@@ -523,7 +523,7 @@ namespace FT
     /// @note Lower/upper naming does not promise bounds for negative exponents or all rounding cases.
     static forcedinline float powf_fast_ub(float a, float b) {
         union { float d; int x; } u = { a };
-        u.x = (int)(b * (u.x - 1064631197) + 1065353217);
+        u.x = (int)(b * (u.x - 1064631197) + float(1065353217));
         return u.d;
     }
 
@@ -548,7 +548,7 @@ namespace FT
     /// @note Lower/upper naming does not promise bounds for negative exponents or all rounding cases.
     static forcedinline double pow_fast_ub(double a, double b) {
         union { double d; long long x; } u = { a };
-        u.x = (long long)(b * (u.x - 4606794787981043020LL) + 4607182418800017409LL);
+        u.x = (long long)(b * (u.x - 4606794787981043020LL) + double(4607182418800017409LL));
         return u.d;
     }
 
@@ -559,7 +559,7 @@ namespace FT
     /// @pre Encoded representations, intermediate products, and any reciprocal must remain finite and in range.
     static forcedinline double pow_fast(double a, double b) {
         union { double d; long long x; } u = { a };
-        u.x = (long long)(b * (u.x - 4606921278410026770LL) + 4606921278410026770LL);
+        u.x = (long long)(b * (u.x - 4606921278410026770LL) + double(4606921278410026770LL));
         return u.d;
     }
 
@@ -571,7 +571,7 @@ namespace FT
     /// @note Lower/upper naming does not promise bounds for negative exponents or all rounding cases.
     static forcedinline double pow_fast_lb(double a, double b) {
         union { double d; long long x; } u = { a };
-        u.x = (long long)(b * (u.x - 4607182418800017409LL) + 4606794787981043020LL);
+        u.x = (long long)(b * (u.x - 4607182418800017409LL) + double(4606794787981043020LL));
         return u.d;
     }
 

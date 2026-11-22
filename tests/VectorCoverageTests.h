@@ -117,7 +117,7 @@ namespace gfxmath_tests
 
         for (int dimension = 0; dimension < V::size(); ++dimension)
         {
-            aliases.value._[dimension] = T(dimension + 31);
+            aliases.value._[dimension] = T(Scalar<T>(dimension + 31));
         }
 
         expectVector(
@@ -132,7 +132,7 @@ namespace gfxmath_tests
         {
             for (int dimension = 0; dimension < V::size(); ++dimension)
             {
-                aliases.array[dimension] = T(dimension + 41);
+                aliases.array[dimension] = T(Scalar<T>(dimension + 41));
             }
 
             expectVector(
@@ -195,7 +195,7 @@ namespace gfxmath_tests
         expectVector(context, V3(scalarFour), expected, 0, "vec3 scalar vec4 constructor broadcasts xyz");
         expectVector(context, V4(scalarFour), expected, 0, "vec4 scalar-vector constructor broadcasts every component");
         expectVector(
-            context, scalarPair.operator dex::vec2<T>(), expected, 0, "vec2 conversion operator casts or broadcasts both components");
+            context, scalarPair.operator V2(), expected, 0, "vec2 conversion operator casts or broadcasts both components");
 
         if constexpr (std::is_arithmetic_v<T>)
         {

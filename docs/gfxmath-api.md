@@ -184,6 +184,26 @@ void processFourPoints()
 returns the scalar/VCL floating element code. `Scalar` is the scalar component
 type, even when each coordinate is a packed component.
 
+### Scalar vec3 layouts
+
+| Layout | Template | Float | Double | Storage |
+| --- | --- | --- | --- | --- |
+| Legacy | `vec3<T>` | `vec3f` | `vec3d` | XYZ with the native VCL overlay |
+| Packed | `vec3_packed<T>` | `vec3fpc` | `vec3dpc` | Three contiguous scalars |
+| Padded | `vec3_padded<T>` | `vec3fpd` | `vec3dpd` | Three contiguous scalars followed by one reserved scalar |
+
+The new layouts support `float` and `double`. All three use the same XYZ
+formulas. Converting between layouts copies XYZ, and results of mixed-layout
+arithmetic use the left operand's layout. Unary operations preserve the input
+layout. Padded vectors constructed from XYZ initialize the fourth slot to zero. In-place XYZ
+operations leave it alone, and `size()`, `load()`, and `store()` operate on
+three coordinates. Packed and padded layouts have scalar alignment.
+
+The new layouts expose `x`, `y`, `z`, the named swizzles, and the coordinate
+and transfer methods. The legacy layout continues to expose its union aliases.
+Rebuild consumers of a previous version because the `vec3` class template now
+includes a defaulted layout parameter.
+
 ### Construction and public fields
 
 | Operation | `vec2<T>` | `vec3<T>` | `vec4<T>` |
@@ -208,7 +228,7 @@ Cross-dimension constructors exist when their source features are enabled:
   representation. A `const T*` constructor reads exactly four `T` objects.
 - `vec2` has a conversion operator to `vec2<AS>` which converts its coordinates.
 
-`vec3`/`vec4` expose `array`, `value`, and a legacy `vcl` union member;
+`vec3<T>` in the legacy layout and `vec4<T>` expose `array`, `value`, and a `vcl` union member;
 `vec2` exposes `value`. The `vcl` overlay is a complete packed spatial
 representation only for appropriate scalar-component layouts. For wide-member
 vectors it is not a replacement for X/Y/Z/W. Use public coordinate, lane, and
@@ -538,7 +558,7 @@ snapshot. Binding `float&` or `double&` to an indexed lane is unsupported.
 ## Matrix4
 
 `Matrix4<T>` supports scalar `float` and `double`, with aliases `Matrix4f`
-and `Matrix4d`. Each matrix is stored as four native VCL **columns**:
+(`matrix4f`) and `Matrix4d` (`matrix4d`). Each matrix is stored as four native VCL **columns**:
 `col0`, `col1`, `col2`, `col3`, or the `col[4]` overlay. Vectors are column
 vectors, so `multiply(v)` computes `M * v`, and `A.multipliedWith(B)`
 returns `A * B`. In this product B acts on a point first.
@@ -590,7 +610,7 @@ const auto direction = model.transformDir(dex::vec3f(1.0f, 0.0f, 0.0f));
 | `multiply(Vector_t<T,4>) const` | Uses all four input coordinates and returns native four-component result. |
 | `multiply(vec4<T>) const` | Uses supplied W and returns vec4. |
 | `multiply(vec4<T>, T& replacementW) const` | Computes the full product, then replaces result W with the referenced value. The reference is an input; it is not assigned the computed W. |
-| `transformPoint(vec3<T>) const` | Force W = one, multiply, return XYZ without homogeneous division. |
+| `M * point`, `transformPoint(vec3<T, Layout>) const` | Force W = one, multiply, and return XYZ in the input layout without homogeneous division. |
 | `transformPoint(vec4<T>) const` | Replace input W with one, multiply, return all four output coordinates. |
 | `transformPointCartesian(vec3<F>/vec4<F>) const` | Force W = one, multiply, divide by computed output W, return in precision F. |
 | `transformPointCartesian(V3_t<F,4>) const` | Four independent input points, same homogeneous divide per lane. |

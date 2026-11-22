@@ -1,6 +1,6 @@
 #pragma once
 
-#include "TestSupport.h"
+#include "VectorTests.h"
 
 #include <numbers>
 
@@ -538,40 +538,16 @@ namespace gfxmath_tests
 
                     const auto expected = referenceHash<S, InputSize, OutputSize>(scalarInput);
 
-                    for (size_t component = 0; component < OutputSize; ++component)
+                    for (size_t coordinate = 0; coordinate < OutputSize; ++coordinate)
                     {
-                        S observed;
-
-                        if constexpr (OutputSize == 1)
+                        const S observed = [&]
                         {
-                            observed = lane(actual, laneIndex);
-                        }
-                        else
-                        {
-                            const auto scalarResult = actual.extract(laneIndex);
-
-                            if (component == 0)
-                            {
-                                observed = scalarResult.x;
-                            }
-                            else if (component == 1)
-                            {
-                                observed = scalarResult.y;
-                            }
-                            else if constexpr (OutputSize >= 3)
-                            {
-                                if (component == 2)
-                                {
-                                    observed = scalarResult.z;
-                                }
-                                else if constexpr (OutputSize == 4)
-                                {
-                                    observed = scalarResult.w;
-                                }
-                            }
-                        }
-
-                        context.near(observed, expected[component], std::is_same_v<S, float> ? 2.0e-5 : 1.0e-12,
+                            if constexpr (OutputSize == 1)
+                                return lane(actual, laneIndex);
+                            else
+                                return component(actual.extract(laneIndex), static_cast<int>(coordinate));
+                        }();
+                        context.near(observed, expected[coordinate], std::is_same_v<S, float> ? 2.0e-5 : 1.0e-12,
                             "hash matches independent scalar array algorithm");
                         context.expect(
                             std::isfinite(observed) && observed > S(-1) && observed < S(1), "hash finite signed fractional range");

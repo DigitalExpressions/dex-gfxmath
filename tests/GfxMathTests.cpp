@@ -1,6 +1,7 @@
 #include "TestSupport.h"
 #include "VectorTests.h"
 #include "VectorCoverageTests.h"
+#include "Vec3LayoutTests.h"
 #include "TransformTests.h"
 #include "TransformCoverageTests.h"
 #include "SwizzleTests.h"
@@ -41,6 +42,7 @@ int main()
     gfxmath_tests::TestContext context;
     gfxmath_tests::runVectorTests(context);
     gfxmath_tests::runVectorCoverageTests(context);
+    gfxmath_tests::runVec3LayoutTests(context);
     gfxmath_tests::forFloatingTypes(
         [&]<typename T>(std::string_view name)
         {

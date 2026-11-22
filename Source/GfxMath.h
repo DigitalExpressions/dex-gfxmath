@@ -1087,7 +1087,8 @@ namespace dex
 #endif
 
 #if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
-	template <typename T> class vec3;
+    enum class vec3_layout { legacy, packed, padded };
+    template <typename T, vec3_layout Layout = vec3_layout::legacy> class vec3;
 #define VEC3ZERO {0,0,0}
 #define VEC3POSX {1,0,0}
 #define VEC3POSY {0,1,0}
@@ -1096,28 +1097,28 @@ namespace dex
 #define VEC3NEGY {0,-1,0}
 #define VEC3NEGZ {0,0,-1}
     /// @brief Zero XYZ coordinates in scalar/native component type T.
-	template <typename T = float> const vec3<T> Vec3Zero VEC3ZERO;
+	template <typename T = float, vec3_layout Layout = vec3_layout::legacy> const vec3<T, Layout> Vec3Zero VEC3ZERO;
     /// @brief Positive X unit direction in scalar/native component type T.
-	template <typename T = float> const vec3<T> Vec3PosX VEC3POSX;
+	template <typename T = float, vec3_layout Layout = vec3_layout::legacy> const vec3<T, Layout> Vec3PosX VEC3POSX;
     /// @brief Positive Y unit direction in scalar/native component type T.
-	template <typename T = float> const vec3<T> Vec3PosY VEC3POSY;
+	template <typename T = float, vec3_layout Layout = vec3_layout::legacy> const vec3<T, Layout> Vec3PosY VEC3POSY;
     /// @brief Positive Z unit direction in scalar/native component type T.
-	template <typename T = float> const vec3<T> Vec3PosZ VEC3POSZ;
+	template <typename T = float, vec3_layout Layout = vec3_layout::legacy> const vec3<T, Layout> Vec3PosZ VEC3POSZ;
     /// @brief Negative X unit direction in scalar/native component type T.
-	template <typename T = float> const vec3<T> Vec3NegX VEC3NEGX;
+	template <typename T = float, vec3_layout Layout = vec3_layout::legacy> const vec3<T, Layout> Vec3NegX VEC3NEGX;
     /// @brief Negative Y unit direction in scalar/native component type T.
-	template <typename T = float> const vec3<T> Vec3NegY VEC3NEGY;
+	template <typename T = float, vec3_layout Layout = vec3_layout::legacy> const vec3<T, Layout> Vec3NegY VEC3NEGY;
     /// @brief Negative Z unit direction in scalar/native component type T.
-	template <typename T = float> const vec3<T> Vec3NegZ VEC3NEGZ;
+	template <typename T = float, vec3_layout Layout = vec3_layout::legacy> const vec3<T, Layout> Vec3NegZ VEC3NEGZ;
     /// @brief Deterministic noncryptographic hash from 3 input component(s) to 1 output component(s).
     /// @note Native component lanes are independent; truncation-based fractions may be negative.
-	template <typename T> static forcedinline T hash13(const vec3<T> p);
+	template <typename T, vec3_layout Layout> static forcedinline T hash13(const vec3<T, Layout> p);
     /// @brief Deterministic noncryptographic hash from 1 input component(s) to 3 output component(s).
     /// @note Native component lanes are independent; truncation-based fractions may be negative.
-	template <typename T> static forcedinline vec3<T> hash31(T p);
+	template <typename T, vec3_layout Layout = vec3_layout::legacy> static forcedinline vec3<T, Layout> hash31(T p);
     /// @brief Deterministic noncryptographic hash from 3 input component(s) to 3 output component(s).
     /// @note Native component lanes are independent; truncation-based fractions may be negative.
-	template <typename T> static forcedinline vec3<T> hash33(const vec3<T> p);
+	template <typename T, vec3_layout Layout> static forcedinline vec3<T, Layout> hash33(const vec3<T, Layout> p);
 #endif
 
 #if defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
@@ -1178,10 +1179,10 @@ namespace dex
 #if defined(GFXMATH_VEC2) && defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
     /// @brief Deterministic noncryptographic hash from 3 input component(s) to 2 output component(s).
     /// @note Native component lanes are independent; truncation-based fractions may be negative.
-	template <typename T> static forcedinline vec2<T> hash23(const vec3<T> p);
+	template <typename T, vec3_layout Layout> static forcedinline vec2<T> hash23(const vec3<T, Layout> p);
     /// @brief Deterministic noncryptographic hash from 2 input component(s) to 3 output component(s).
     /// @note Native component lanes are independent; truncation-based fractions may be negative.
-	template <typename T> static forcedinline vec3<T> hash32(const vec2<T> p);
+	template <typename T, vec3_layout Layout = vec3_layout::legacy> static forcedinline vec3<T, Layout> hash32(const vec2<T> p);
 #endif
 
 #if defined(GFXMATH_VEC2) && defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
@@ -1193,7 +1194,7 @@ namespace dex
 #if defined(GFXMATH_VEC3) && defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
     /// @brief Deterministic noncryptographic hash from 3 input component(s) to 4 output component(s).
     /// @note Native component lanes are independent; truncation-based fractions may be negative.
-	template <typename T> static forcedinline vec4<T> hash43(const vec3<T> p);
+	template <typename T, vec3_layout Layout> static forcedinline vec4<T> hash43(const vec3<T, Layout> p);
 #endif
 
 #if defined(GFXMATH_ARGB) || defined(GFXMATH_ALL)
@@ -1258,14 +1259,19 @@ namespace dex
         constexpr vec2(T x, T y) : x(x), y(y) {}
         /// @brief Copy compatible coordinates, converting scalar precision or broadcasting scalar coordinates when
         /// needed.
+        constexpr vec2(const vec2&) = default;
+        constexpr vec2(const vec2& v) requires std::is_same_v<T, Scalar> : x(v.x), y(v.y) {}
+        template <typename Q = T>
+            requires (!std::is_same_v<Q, Scalar>)
         constexpr vec2(const vec2<Scalar>& v) : x(v.x), y(v.y) {}
+        constexpr vec2& operator=(const vec2&) = default;
         /// @brief Construct from the coordinate-array storage wrapper.
         constexpr vec2(const Value& v) : value(v) {}
         /// @brief Copy compatible coordinates, converting scalar precision or broadcasting scalar coordinates when
         /// needed.
         template <typename FP,
             typename std::enable_if_t<!std::is_same_v<T, FP> && std::is_floating_point_v<T> && std::is_floating_point_v<FP>, bool> = true>
-        constexpr vec2(const vec2<FP>& v) : x(v.x), y(v.y)
+        constexpr vec2(const vec2<FP>& v) : x(T(v.x)), y(T(v.y))
         {
         }
 
@@ -1274,15 +1280,15 @@ namespace dex
 
         /// @brief Replace one independent spatial SIMD lane; scalar-component vectors replace the whole value.
         /// @pre index is a valid zero-based independent lane index; use zero for a scalar-component vector.
-        forcedinline void insert(int index, const vec2<Scalar> value)
+        forcedinline void insert(int index, const vec2<Scalar> point)
         {
             if constexpr (elements_v<T> > 1)
             {
-                x.insert(index, value.x);
-                y.insert(index, value.y);
+                x.insert(index, point.x);
+                y.insert(index, point.y);
             }
             else
-                *this = value;
+                *this = point;
         }
 
         /// @brief Copy one independent spatial SIMD lane; scalar-component vectors return the whole value.
@@ -1543,120 +1549,134 @@ namespace dex
 	* ----------------------------------------------------------------
 	*/
 #if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
+    namespace detail
+    {
+        template <typename T> struct Vec3Value
+        {
+            T _[3];
+        };
+
+        template <typename T, vec3_layout Layout> struct Vec3Storage;
+
+        template <typename T> struct Vec3Storage<T, vec3_layout::legacy>
+        {
+            union
+            {
+                struct { T x, y, z; };
+                struct { T u, v, w; };
+                struct { T r, g, b; };
+                Vec3Value<T> value;
+                T array[3];
+                Vector_t<T, 4> vcl;
+            };
+
+            constexpr Vec3Storage(T a, T b, T c) : x(a), y(b), z(c) {}
+        };
+
+        template <typename T> struct Vec3Storage<T, vec3_layout::packed>
+        {
+            static_assert(std::is_same_v<T, float> || std::is_same_v<T, double>);
+            T x, y, z;
+        };
+
+        template <typename T> struct Vec3Storage<T, vec3_layout::padded>
+        {
+            static_assert(std::is_same_v<T, float> || std::is_same_v<T, double>);
+            T x, y, z;
+            T padding{};
+        };
+    }
+
     /// @brief A 3-coordinate spatial vector, or independent spatial vectors batched by coordinate.
     /// @tparam T Scalar float/double or a supported native SIMD component type.
+    /// @tparam Layout Legacy storage, three contiguous scalars, or three scalars followed by a reserved scalar.
     /// @details Each coordinate stores one T; packed T lanes represent independent vectors.
     /// Geometry reduces coordinates within each lane. size() is the coordinate count, not the lane count.
     /// Comparisons return numeric coordinate vectors; named predicates return Boolean/mask results.
     /// @see docs/gfxmath-api.md
-    template <typename T> class vec3
+    template <typename T, vec3_layout Layout> class vec3 : public detail::Vec3Storage<T, Layout>
     {
+        using Storage = detail::Vec3Storage<T, Layout>;
+
     public:
         /// @brief Scalar float/double type of one coordinate lane.
         using Scalar = Scalar_t<T>;
         /// @brief Aggregate containing exactly 3 coordinate objects of type T.
-        struct Value
-        {
-            /// @brief Coordinate objects in spatial coordinate order; packed coordinates retain their own SIMD
-            /// lanes.
-            T _[3];
-        };
+        using Value = detail::Vec3Value<T>;
+        using Storage::x;
+        using Storage::y;
+        using Storage::z;
+
         /// @brief Return the fixed coordinate count (3), not the number of SIMD lanes.
         static constexpr int size() { return 3; }
-        union
-        {
-            struct
-            {
-                /// @brief Spatial X/Y/Z coordinates, one independent value per component lane.
-                T x, y, z;
-            };
-            struct
-            {
-                /// @brief Texture-coordinate aliases for X/Y/Z.
-                T u, v, w;
-            };
-            struct
-            {
-                /// @brief Color-channel aliases for X/Y/Z.
-                T r, g, b;
-            };
-            /// @brief Legacy coordinate-array overlay; prefer coordinate and transfer methods for ordinary access.
-            Value value;
-            /// @brief Legacy coordinate-array overlay; this is not an array of interleaved scalar points for packed
-            /// T.
-            T array[3];
-            /// @brief Legacy native storage overlay; it represents the whole spatial vector only for compatible
-            /// scalar layouts.
-            /// @note For packed component types, use X/Y/Z/W rather than treating this as the complete vector.
-            Vector_t<T, 4> vcl;
-        };
 
         /// @brief Construct a zero vector in every coordinate and independent lane.
-        constexpr vec3() : x(0.0f), y(0.0f), z(0.0f) {}
+        constexpr vec3() : vec3(T(Scalar(0))) {}
         /// @brief Broadcast the supplied value to every coordinate and, for a scalar input, every SIMD lane.
-        constexpr vec3(T v) : x(v), y(v), z(v) {}
+        constexpr vec3(T v) : vec3(v, v, v) {}
         /// @brief Broadcast the supplied value to every coordinate and, for a scalar input, every SIMD lane.
         template <typename Q = T, typename std::enable_if_t<!std::is_arithmetic_v<Q>, bool> = true>
-        constexpr vec3(Scalar v) : x(v), y(v), z(v)
-        {
-        }
-        /// @brief Assemble coordinates in argument order; omitted trailing coordinates are zero.
-        constexpr vec3(T x, T y, T z) : x(x), y(y), z(z) {}
+        constexpr vec3(Scalar v) : vec3(T(v)) {}
+        /// @brief Assemble coordinates in argument order.
+        constexpr vec3(T x, T y, T z) : Storage{x, y, z} {}
 #if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
         /// @brief Assemble coordinates in argument order; omitted trailing coordinates are zero.
-        constexpr vec3(T x, const vec2<T> v2) : x(x), y(v2.x), z(v2.y) {}
+        constexpr vec3(T x, const vec2<T> v2) : vec3(x, v2.x, v2.y) {}
         /// @brief Assemble coordinates in argument order; omitted trailing coordinates are zero.
-        constexpr vec3(const vec2<T> v2, T z = {}) : x(v2.x), y(v2.y), z(z) {}
+        constexpr vec3(const vec2<T> v2, T z = {}) : vec3(v2.x, v2.y, z) {}
 #endif
-        /// @brief Copy compatible coordinates, converting scalar precision or broadcasting scalar coordinates when
-        /// needed.
-        constexpr vec3(const vec3<Scalar>& v) : x(v.x), y(v.y), z(v.z) {}
-        /// @brief Copy compatible coordinates, converting scalar precision or broadcasting scalar coordinates when
-        /// needed.
-        template <typename FP,
-            typename std::enable_if_t<!std::is_same_v<T, FP> && std::is_floating_point_v<T> && std::is_floating_point_v<FP>, bool> = true>
-        constexpr vec3(const vec3<FP>& v) : x(v.x), y(v.y), z(v.z)
-        {
-        }
+        constexpr vec3(const vec3&) = default;
+        constexpr vec3(const vec3& v) requires (Layout == vec3_layout::legacy && std::is_same_v<T, Scalar>)
+            : vec3(v.x, v.y, v.z) {}
+        constexpr vec3& operator=(const vec3&) = default;
+
+        /// @brief Copy XYZ across layouts, converting scalar precision or broadcasting scalar coordinates as needed.
+        template <typename U, vec3_layout Other>
+            requires ((Layout != Other && std::is_same_v<T, U>) ||
+                      (!std::is_same_v<T, U> && (std::is_same_v<Scalar, U> ||
+                          (std::is_floating_point_v<T> && std::is_floating_point_v<U>))))
+        constexpr vec3(const vec3<U, Other>& v) : vec3(T(v.x), T(v.y), T(v.z)) {}
 #if defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
         /// @brief Copy the leading 3 coordinates of a compatible spatial vector.
-        constexpr vec3(const vec4<Scalar>& v) : x(v.x), y(v.y), z(v.z) {}
+        constexpr vec3(const vec4<Scalar>& v) : vec3(T(v.x), T(v.y), T(v.z)) {}
         /// @brief Copy the leading 3 coordinates of a compatible spatial vector.
         template <typename Q = T, typename std::enable_if_t<!std::is_arithmetic_v<Q>, bool> = true>
-        constexpr vec3(const vec4<T>& v) : x(v.x), y(v.y), z(v.z)
-        {
-        }
+        constexpr vec3(const vec4<T>& v) : vec3(v.x, v.y, v.z) {}
 #endif
         /// @brief Construct from the coordinate-array storage wrapper.
-        constexpr vec3(const Value& v) : value(v) {}
+        constexpr vec3(const Value& v) : vec3(v._[0], v._[1], v._[2]) {}
 
         /// @brief Replace one independent spatial SIMD lane; scalar-component vectors replace the whole value.
         /// @pre index is a valid zero-based independent lane index; use zero for a scalar-component vector.
-        forcedinline void insert(int index, const vec3<Scalar>& value)
+        forcedinline void insert(int index, const vec3<Scalar, Layout>& point)
         {
             if constexpr (elements_v<T> > 1)
             {
-                x.insert(index, value.x);
-                y.insert(index, value.y);
-                z.insert(index, value.z);
+                x.insert(index, point.x);
+                y.insert(index, point.y);
+                z.insert(index, point.z);
             }
             else
-                *this = value;
+            {
+                x = point.x;
+                y = point.y;
+                z = point.z;
+            }
         }
 
         /// @brief Copy one independent spatial SIMD lane; scalar-component vectors return the whole value.
         /// @pre index is a valid zero-based independent lane index; use zero for a scalar-component vector.
-        forcedinline vec3<Scalar> extract(int index) const
+        forcedinline vec3<Scalar, Layout> extract(int index) const
         {
             if constexpr (elements_v<T> > 1)
                 return {x.extract(index), y.extract(index), z.extract(index)};
             else
-                return *this;
+                return {x, y, z};
         }
 
         /// @brief Copy one independent spatial lane, as extract(index) does; this is not coordinate indexing.
         /// @pre index is a valid zero-based lane index.
-        forcedinline vec3<Scalar> operator[](int index) const { return extract(index); }
+        forcedinline vec3<Scalar, Layout> operator[](int index) const { return extract(index); }
 
         /// @brief Append the argument's independent lanes after this vector's lanes in every coordinate.
         template <typename Q = T,
@@ -1753,6 +1773,13 @@ namespace dex
         {
             return {select(x == a.x, T(1), T(0)), select(y == a.y, T(1), T(0)), select(z == a.z, T(1), T(0))};
         }
+        /// @brief Compare XYZ across layouts and return the left operand's layout.
+        template <typename U, vec3_layout Other>
+            requires (!std::is_same_v<vec3, vec3<U, Other>> && std::is_convertible_v<const vec3<U, Other>&, vec3>)
+        forcedinline vec3 operator==(const vec3<U, Other>& a) const noexcept
+        {
+            return operator==(vec3(a));
+        }
         /// @brief Return numeric one where each coordinate is greater than its counterpart, otherwise zero.
         /// @return A spatial zero/one vector per independent lane, not a Boolean mask.
         forcedinline vec3 operator>(const vec3& a) const noexcept
@@ -1810,9 +1837,9 @@ namespace dex
         /// @brief Return the squared coordinate norm separately within each independent lane.
         forcedinline T lengthSquared() const noexcept { return x * x + y * y + z * z; }
         /// @brief Return the norm of the coordinate difference to v, separately in every independent lane.
-        forcedinline T distance(const vec3<T> v) const noexcept { return (*this - v).length(); }
+        forcedinline T distance(const vec3 v) const noexcept { return (*this - v).length(); }
         /// @brief Return the squared norm of the coordinate difference to v, separately in every independent lane.
-        forcedinline T distanceSquared(const vec3<T> v) const noexcept { return (*this - v).lengthSquared(); }
+        forcedinline T distanceSquared(const vec3 v) const noexcept { return (*this - v).lengthSquared(); }
         /// @brief Divide in place by length plus scalar epsilon; return this vector by reference. Zero remains
         /// zero.
         forcedinline vec3& normalize() noexcept
@@ -1889,243 +1916,241 @@ namespace dex
 
         /// @brief Multiply centered random XYZ by mult.
         /// @param seed Valid mutable RNG state; draws advance this state, including discarded coordinates.
-        static forcedinline vec3 xyzmult_rand(int* seed, const vec3<T> mult) { return xyz_rand(seed) * mult; }
+        static forcedinline vec3 xyzmult_rand(int* seed, const vec3 mult) { return xyz_rand(seed) * mult; }
 
 #if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
         /// @brief Return the (x, x) swizzle as a copy, preserving every independent SIMD lane.
 		forcedinline vec2<T> xx() const noexcept { return { x, x }; }
-        /// @brief Return the (r, r) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec2<T> rr() const noexcept { return { r, r }; }
+        /// @brief Return the (x, x) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec2<T> rr() const noexcept { return { x, x }; }
         /// @brief Return the (x, x) swizzle as a copy, preserving every independent SIMD lane.
         forcedinline vec2<T> uu() const noexcept { return { x, x }; }
         /// @brief Return the (x, y) swizzle as a copy, preserving every independent SIMD lane.
 		forcedinline vec2<T> xy() const noexcept { return { x, y }; }
-        /// @brief Return the (r, g) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec2<T> rg() const noexcept { return { r, g }; }
+        /// @brief Return the (x, y) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec2<T> rg() const noexcept { return { x, y }; }
         /// @brief Return the (x, y) swizzle as a copy, preserving every independent SIMD lane.
         forcedinline vec2<T> uv() const noexcept { return { x, y }; }
         /// @brief Return the (x, z) swizzle as a copy, preserving every independent SIMD lane.
 		forcedinline vec2<T> xz() const noexcept { return { x, z }; }
-        /// @brief Return the (r, b) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec2<T> rb() const noexcept { return { r, b }; }
+        /// @brief Return the (x, z) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec2<T> rb() const noexcept { return { x, z }; }
         /// @brief Return the (x, z) swizzle as a copy, preserving every independent SIMD lane.
         forcedinline vec2<T> uw() const noexcept { return { x, z }; }
         /// @brief Return the (y, x) swizzle as a copy, preserving every independent SIMD lane.
 		forcedinline vec2<T> yx() const noexcept { return { y, x }; }
-        /// @brief Return the (g, r) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec2<T> gr() const noexcept { return { g, r }; }
+        /// @brief Return the (y, x) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec2<T> gr() const noexcept { return { y, x }; }
         /// @brief Return the (y, x) swizzle as a copy, preserving every independent SIMD lane.
         forcedinline vec2<T> vu() const noexcept { return { y, x }; }
         /// @brief Return the (y, y) swizzle as a copy, preserving every independent SIMD lane.
 		forcedinline vec2<T> yy() const noexcept { return { y, y }; }
-        /// @brief Return the (g, g) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec2<T> gg() const noexcept { return { g, g }; }
+        /// @brief Return the (y, y) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec2<T> gg() const noexcept { return { y, y }; }
         /// @brief Return the (y, y) swizzle as a copy, preserving every independent SIMD lane.
         forcedinline vec2<T> vv() const noexcept { return { y, y }; }
         /// @brief Return the (y, z) swizzle as a copy, preserving every independent SIMD lane.
 		forcedinline vec2<T> yz() const noexcept { return { y, z }; }
-        /// @brief Return the (g, b) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec2<T> gb() const noexcept { return { g, b }; }
+        /// @brief Return the (y, z) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec2<T> gb() const noexcept { return { y, z }; }
         /// @brief Return the (y, z) swizzle as a copy, preserving every independent SIMD lane.
         forcedinline vec2<T> vw() const noexcept { return { y, z }; }
         /// @brief Return the (z, x) swizzle as a copy, preserving every independent SIMD lane.
 		forcedinline vec2<T> zx() const noexcept { return { z, x }; }
-        /// @brief Return the (b, r) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec2<T> br() const noexcept { return { b, r }; }
+        /// @brief Return the (z, x) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec2<T> br() const noexcept { return { z, x }; }
         /// @brief Return the (z, x) swizzle as a copy, preserving every independent SIMD lane.
         forcedinline vec2<T> wu() const noexcept { return { z, x }; }
         /// @brief Return the (z, y) swizzle as a copy, preserving every independent SIMD lane.
 		forcedinline vec2<T> zy() const noexcept { return { z, y }; }
-        /// @brief Return the (b, g) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec2<T> bg() const noexcept { return { b, g }; }
+        /// @brief Return the (z, y) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec2<T> bg() const noexcept { return { z, y }; }
         /// @brief Return the (z, y) swizzle as a copy, preserving every independent SIMD lane.
         forcedinline vec2<T> wv() const noexcept { return { z, y }; }
         /// @brief Return the (z, z) swizzle as a copy, preserving every independent SIMD lane.
 		forcedinline vec2<T> zz() const noexcept { return { z, z }; }
-        /// @brief Return the (b, b) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec2<T> bb() const noexcept { return { b, b }; }
+        /// @brief Return the (z, z) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec2<T> bb() const noexcept { return { z, z }; }
         /// @brief Return the (z, z) swizzle as a copy, preserving every independent SIMD lane.
         forcedinline vec2<T> ww() const noexcept { return { z, z }; }
 #endif
 
         /// @brief Return the (x, x, x) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> xxx() const noexcept { return { x, x, x }; }
-        /// @brief Return the (r, r, r) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> rrr() const noexcept { return { r, r, r }; }
+		forcedinline vec3 xxx() const noexcept { return { x, x, x }; }
         /// @brief Return the (x, x, x) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> uuu() const noexcept { return { x, x, x }; }
+        forcedinline vec3 rrr() const noexcept { return { x, x, x }; }
+        /// @brief Return the (x, x, x) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 uuu() const noexcept { return { x, x, x }; }
         /// @brief Return the (x, x, y) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> xxy() const noexcept { return { x, x, y }; }
-        /// @brief Return the (r, r, g) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> rrg() const noexcept { return { r, r, g }; }
+		forcedinline vec3 xxy() const noexcept { return { x, x, y }; }
         /// @brief Return the (x, x, y) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> uuv() const noexcept { return { x, x, y }; }
+        forcedinline vec3 rrg() const noexcept { return { x, x, y }; }
+        /// @brief Return the (x, x, y) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 uuv() const noexcept { return { x, x, y }; }
         /// @brief Return the (x, x, z) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> xxz() const noexcept { return { x, x, z }; }
-        /// @brief Return the (r, r, b) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> rrb() const noexcept { return { r, r, b }; }
+		forcedinline vec3 xxz() const noexcept { return { x, x, z }; }
         /// @brief Return the (x, x, z) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> uuw() const noexcept { return { x, x, z }; }
+        forcedinline vec3 rrb() const noexcept { return { x, x, z }; }
+        /// @brief Return the (x, x, z) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 uuw() const noexcept { return { x, x, z }; }
         /// @brief Return the (x, y, x) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> xyx() const noexcept { return { x, y, x }; }
-        /// @brief Return the (r, g, r) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> rgr() const noexcept { return { r, g, r }; }
+		forcedinline vec3 xyx() const noexcept { return { x, y, x }; }
         /// @brief Return the (x, y, x) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> uvu() const noexcept { return { x, y, x }; }
+        forcedinline vec3 rgr() const noexcept { return { x, y, x }; }
+        /// @brief Return the (x, y, x) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 uvu() const noexcept { return { x, y, x }; }
         /// @brief Return the (x, y, y) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> xyy() const noexcept { return { x, y, y }; }
-        /// @brief Return the (r, g, g) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> rgg() const noexcept { return { r, g, g }; }
+		forcedinline vec3 xyy() const noexcept { return { x, y, y }; }
         /// @brief Return the (x, y, y) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> uvv() const noexcept { return { x, y, y }; }
+        forcedinline vec3 rgg() const noexcept { return { x, y, y }; }
+        /// @brief Return the (x, y, y) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 uvv() const noexcept { return { x, y, y }; }
         /// @brief Return the (x, y, z) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> xyz() const noexcept { return { x, y, z }; }
-        /// @brief Return the (r, g, b) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> rgb() const noexcept { return { r, g, b }; }
+		forcedinline vec3 xyz() const noexcept { return { x, y, z }; }
         /// @brief Return the (x, y, z) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> uvw() const noexcept { return { x, y, z }; }
+        forcedinline vec3 rgb() const noexcept { return { x, y, z }; }
+        /// @brief Return the (x, y, z) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 uvw() const noexcept { return { x, y, z }; }
         /// @brief Return the (x, z, x) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> xzx() const noexcept { return { x, z, x }; }
-        /// @brief Return the (r, b, r) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> rbr() const noexcept { return { r, b, r }; }
+		forcedinline vec3 xzx() const noexcept { return { x, z, x }; }
         /// @brief Return the (x, z, x) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> uwu() const noexcept { return { x, z, x }; }
+        forcedinline vec3 rbr() const noexcept { return { x, z, x }; }
+        /// @brief Return the (x, z, x) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 uwu() const noexcept { return { x, z, x }; }
         /// @brief Return the (x, z, y) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> xzy() const noexcept { return { x, z, y }; }
-        /// @brief Return the (r, b, g) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> rbg() const noexcept { return { r, b, g }; }
+		forcedinline vec3 xzy() const noexcept { return { x, z, y }; }
         /// @brief Return the (x, z, y) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> uwv() const noexcept { return { x, z, y }; }
+        forcedinline vec3 rbg() const noexcept { return { x, z, y }; }
+        /// @brief Return the (x, z, y) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 uwv() const noexcept { return { x, z, y }; }
         /// @brief Return the (x, z, z) swizzle as a copy, preserving every independent SIMD lane.
-    forcedinline vec3<T> xzz() const noexcept { return { x, z, z }; }
-        /// @brief Return the (r, b, b) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> rbb() const noexcept { return { r, b, b }; }
+    forcedinline vec3 xzz() const noexcept { return { x, z, z }; }
         /// @brief Return the (x, z, z) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> uww() const noexcept { return { x, z, z }; }
+        forcedinline vec3 rbb() const noexcept { return { x, z, z }; }
+        /// @brief Return the (x, z, z) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 uww() const noexcept { return { x, z, z }; }
         /// @brief Return the (y, x, x) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> yxx() const noexcept { return { y, x, x }; }
-        /// @brief Return the (g, r, r) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> grr() const noexcept { return { g, r, r }; }
+		forcedinline vec3 yxx() const noexcept { return { y, x, x }; }
         /// @brief Return the (y, x, x) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> vuu() const noexcept { return { y, x, x }; }
+        forcedinline vec3 grr() const noexcept { return { y, x, x }; }
+        /// @brief Return the (y, x, x) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 vuu() const noexcept { return { y, x, x }; }
         /// @brief Return the (y, x, y) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> yxy() const noexcept { return { y, x, y }; }
-        /// @brief Return the (g, r, g) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> grg() const noexcept { return { g, r, g }; }
+		forcedinline vec3 yxy() const noexcept { return { y, x, y }; }
         /// @brief Return the (y, x, y) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> vuv() const noexcept { return { y, x, y }; }
+        forcedinline vec3 grg() const noexcept { return { y, x, y }; }
+        /// @brief Return the (y, x, y) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 vuv() const noexcept { return { y, x, y }; }
         /// @brief Return the (y, x, z) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> yxz() const noexcept { return { y, x, z }; }
-        /// @brief Return the (g, r, b) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> grb() const noexcept { return { g, r, b }; }
+		forcedinline vec3 yxz() const noexcept { return { y, x, z }; }
         /// @brief Return the (y, x, z) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> vuw() const noexcept { return { y, x, z }; }
+        forcedinline vec3 grb() const noexcept { return { y, x, z }; }
+        /// @brief Return the (y, x, z) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 vuw() const noexcept { return { y, x, z }; }
         /// @brief Return the (y, y, x) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> yyx() const noexcept { return { y, y, x }; }
-        /// @brief Return the (g, g, r) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> ggr() const noexcept { return { g, g, r }; }
+		forcedinline vec3 yyx() const noexcept { return { y, y, x }; }
         /// @brief Return the (y, y, x) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> vvu() const noexcept { return { y, y, x }; }
+        forcedinline vec3 ggr() const noexcept { return { y, y, x }; }
+        /// @brief Return the (y, y, x) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 vvu() const noexcept { return { y, y, x }; }
         /// @brief Return the (y, y, y) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> yyy() const noexcept { return { y, y, y }; }
-        /// @brief Return the (g, g, g) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> ggg() const noexcept { return { g, g, g }; }
+		forcedinline vec3 yyy() const noexcept { return { y, y, y }; }
         /// @brief Return the (y, y, y) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> vvv() const noexcept { return { y, y, y }; }
+        forcedinline vec3 ggg() const noexcept { return { y, y, y }; }
+        /// @brief Return the (y, y, y) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 vvv() const noexcept { return { y, y, y }; }
         /// @brief Return the (y, y, z) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> yyz() const noexcept { return { y, y, z }; }
-        /// @brief Return the (g, g, b) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> ggb() const noexcept { return { g, g, b }; }
+		forcedinline vec3 yyz() const noexcept { return { y, y, z }; }
         /// @brief Return the (y, y, z) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> vvw() const noexcept { return { y, y, z }; }
+        forcedinline vec3 ggb() const noexcept { return { y, y, z }; }
+        /// @brief Return the (y, y, z) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 vvw() const noexcept { return { y, y, z }; }
         /// @brief Return the (y, z, x) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> yzx() const noexcept { return { y, z, x }; }
-        /// @brief Return the (g, b, r) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> gbr() const noexcept { return { g, b, r }; }
+		forcedinline vec3 yzx() const noexcept { return { y, z, x }; }
         /// @brief Return the (y, z, x) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> vwu() const noexcept { return { y, z, x }; }
+        forcedinline vec3 gbr() const noexcept { return { y, z, x }; }
+        /// @brief Return the (y, z, x) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 vwu() const noexcept { return { y, z, x }; }
         /// @brief Return the (y, z, y) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> yzy() const noexcept { return { y, z, y }; }
-        /// @brief Return the (g, b, g) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> gbg() const noexcept { return { g, b, g }; }
+		forcedinline vec3 yzy() const noexcept { return { y, z, y }; }
         /// @brief Return the (y, z, y) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> vwv() const noexcept { return { y, z, y }; }
+        forcedinline vec3 gbg() const noexcept { return { y, z, y }; }
+        /// @brief Return the (y, z, y) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 vwv() const noexcept { return { y, z, y }; }
         /// @brief Return the (y, z, z) swizzle as a copy, preserving every independent SIMD lane.
-    forcedinline vec3<T> yzz() const noexcept { return { y, z, z }; }
-        /// @brief Return the (g, b, b) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> gbb() const noexcept { return { g, b, b }; }
+    forcedinline vec3 yzz() const noexcept { return { y, z, z }; }
         /// @brief Return the (y, z, z) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> vww() const noexcept { return { y, z, z }; }
+        forcedinline vec3 gbb() const noexcept { return { y, z, z }; }
+        /// @brief Return the (y, z, z) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 vww() const noexcept { return { y, z, z }; }
         /// @brief Return the (z, x, x) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> zxx() const noexcept { return { z, x, x }; }
-        /// @brief Return the (b, r, r) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> brr() const noexcept { return { b, r, r }; }
+		forcedinline vec3 zxx() const noexcept { return { z, x, x }; }
         /// @brief Return the (z, x, x) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> wuu() const noexcept { return { z, x, x }; }
+        forcedinline vec3 brr() const noexcept { return { z, x, x }; }
+        /// @brief Return the (z, x, x) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 wuu() const noexcept { return { z, x, x }; }
         /// @brief Return the (z, x, y) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> zxy() const noexcept { return { z, x, y }; }
-        /// @brief Return the (b, r, g) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> brg() const noexcept { return { b, r, g }; }
+		forcedinline vec3 zxy() const noexcept { return { z, x, y }; }
         /// @brief Return the (z, x, y) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> wuv() const noexcept { return { z, x, y }; }
+        forcedinline vec3 brg() const noexcept { return { z, x, y }; }
+        /// @brief Return the (z, x, y) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 wuv() const noexcept { return { z, x, y }; }
         /// @brief Return the (z, x, z) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> zxz() const noexcept { return { z, x, z }; }
-        /// @brief Return the (b, r, b) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> brb() const noexcept { return { b, r, b }; }
+		forcedinline vec3 zxz() const noexcept { return { z, x, z }; }
         /// @brief Return the (z, x, z) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> wuw() const noexcept { return { z, x, z }; }
+        forcedinline vec3 brb() const noexcept { return { z, x, z }; }
+        /// @brief Return the (z, x, z) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 wuw() const noexcept { return { z, x, z }; }
         /// @brief Return the (z, y, x) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> zyx() const noexcept { return { z, y, x }; }
-        /// @brief Return the (b, g, r) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> bgr() const noexcept { return { b, g, r }; }
+		forcedinline vec3 zyx() const noexcept { return { z, y, x }; }
         /// @brief Return the (z, y, x) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> wvu() const noexcept { return { z, y, x }; }
+        forcedinline vec3 bgr() const noexcept { return { z, y, x }; }
+        /// @brief Return the (z, y, x) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 wvu() const noexcept { return { z, y, x }; }
         /// @brief Return the (z, y, y) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> zyy() const noexcept { return { z, y, y }; }
-        /// @brief Return the (b, g, g) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> bgg() const noexcept { return { b, g, g }; }
+		forcedinline vec3 zyy() const noexcept { return { z, y, y }; }
         /// @brief Return the (z, y, y) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> wvv() const noexcept { return { z, y, y }; }
+        forcedinline vec3 bgg() const noexcept { return { z, y, y }; }
+        /// @brief Return the (z, y, y) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 wvv() const noexcept { return { z, y, y }; }
         /// @brief Return the (z, y, z) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> zyz() const noexcept { return { z, y, z }; }
-        /// @brief Return the (b, g, b) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> bgb() const noexcept { return { b, g, b }; }
+		forcedinline vec3 zyz() const noexcept { return { z, y, z }; }
         /// @brief Return the (z, y, z) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> wvw() const noexcept { return { z, y, z }; }
+        forcedinline vec3 bgb() const noexcept { return { z, y, z }; }
+        /// @brief Return the (z, y, z) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 wvw() const noexcept { return { z, y, z }; }
         /// @brief Return the (z, z, x) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> zzx() const noexcept { return { z, z, x }; }
-        /// @brief Return the (b, b, r) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> bbr() const noexcept { return { b, b, r }; }
+		forcedinline vec3 zzx() const noexcept { return { z, z, x }; }
         /// @brief Return the (z, z, x) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> wwu() const noexcept { return { z, z, x }; }
+        forcedinline vec3 bbr() const noexcept { return { z, z, x }; }
+        /// @brief Return the (z, z, x) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 wwu() const noexcept { return { z, z, x }; }
         /// @brief Return the (z, z, y) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> zzy() const noexcept { return { z, z, y }; }
-        /// @brief Return the (b, b, g) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> bbg() const noexcept { return { b, b, g }; }
+		forcedinline vec3 zzy() const noexcept { return { z, z, y }; }
         /// @brief Return the (z, z, y) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> wwv() const noexcept { return { z, z, y }; }
+        forcedinline vec3 bbg() const noexcept { return { z, z, y }; }
+        /// @brief Return the (z, z, y) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 wwv() const noexcept { return { z, z, y }; }
         /// @brief Return the (z, z, z) swizzle as a copy, preserving every independent SIMD lane.
-		forcedinline vec3<T> zzz() const noexcept { return { z, z, z }; }
-        /// @brief Return the (b, b, b) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> bbb() const noexcept { return { b, b, b }; }
+		forcedinline vec3 zzz() const noexcept { return { z, z, z }; }
         /// @brief Return the (z, z, z) swizzle as a copy, preserving every independent SIMD lane.
-        forcedinline vec3<T> www() const noexcept { return { z, z, z }; }
+        forcedinline vec3 bbb() const noexcept { return { z, z, z }; }
+        /// @brief Return the (z, z, z) swizzle as a copy, preserving every independent SIMD lane.
+        forcedinline vec3 www() const noexcept { return { z, z, z }; }
 
         /// @brief Return the template-selected coordinate or coordinate swizzle; indices select coordinates, not
         /// SIMD lanes.
         /// @pre Every template coordinate index is nonnegative and less than size().
         template <int A0> forcedinline T get() const noexcept
         {
-            assert(A0 < size());
-            return value._[A0];
+            return coordinate<A0>();
         }
         /// @brief Assign the template-selected coordinates in argument order; repeated indices are overwritten by
         /// later arguments.
         /// @pre Every template coordinate index is nonnegative and less than size().
         template <int A0> forcedinline void set(T a0) noexcept
         {
-            assert(A0 < size());
-            value._[A0] = a0;
+            coordinate<A0>() = a0;
         }
 #if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
         /// @brief Return the template-selected coordinate or coordinate swizzle; indices select coordinates, not
@@ -2133,8 +2158,7 @@ namespace dex
         /// @pre Every template coordinate index is nonnegative and less than size().
         template <int A0, int A1> forcedinline vec2<T> get() const noexcept
         {
-            assert(max(A0, A1) < size());
-            return {value._[A0], value._[A1]};
+            return {coordinate<A0>(), coordinate<A1>()};
         }
 #endif
         /// @brief Assign the template-selected coordinates in argument order; repeated indices are overwritten by
@@ -2142,27 +2166,24 @@ namespace dex
         /// @pre Every template coordinate index is nonnegative and less than size().
         template <int A0, int A1> forcedinline void set(T a0, T a1) noexcept
         {
-            assert(max(A0, A1) < size());
-            value._[A0] = a0;
-            value._[A1] = a1;
+            coordinate<A0>() = a0;
+            coordinate<A1>() = a1;
         }
         /// @brief Return the template-selected coordinate or coordinate swizzle; indices select coordinates, not
         /// SIMD lanes.
         /// @pre Every template coordinate index is nonnegative and less than size().
-        template <int A0, int A1, int A2> forcedinline vec3<T> get() const noexcept
+        template <int A0, int A1, int A2> forcedinline vec3 get() const noexcept
         {
-            assert(max(A0, A1, A2) < size());
-            return {value._[A0], value._[A1], value._[A2]};
+            return {coordinate<A0>(), coordinate<A1>(), coordinate<A2>()};
         }
         /// @brief Assign the template-selected coordinates in argument order; repeated indices are overwritten by
         /// later arguments.
         /// @pre Every template coordinate index is nonnegative and less than size().
         template <int A0, int A1, int A2> forcedinline void set(T a0, T a1, T a2) noexcept
         {
-            assert(max(A0, A1, A2) < size());
-            value._[A0] = a0;
-            value._[A1] = a1;
-            value._[A2] = a2;
+            coordinate<A0>() = a0;
+            coordinate<A1>() = a1;
+            coordinate<A2>() = a2;
         }
 
         /**
@@ -2218,9 +2239,9 @@ namespace dex
         /// @pre arr supplies at least 3 readable double objects.
         template <typename F = float> forcedinline void load(typename std::enable_if_t<std::is_same_v<T, F>, const double*> arr) noexcept
         {
-            x = arr[0];
-            y = arr[1];
-            z = arr[2];
+            x = T(arr[0]);
+            y = T(arr[1]);
+            z = T(arr[2]);
         }
 
         /// @brief Return the scalar/VCL floating element-type code for this coordinate type.
@@ -2233,6 +2254,21 @@ namespace dex
             else
                 return T::elementtype();
         }
+
+    private:
+        template <int Index, typename Self> static constexpr auto& coordinateOf(Self& self) noexcept
+        {
+            static_assert(Index >= 0 && Index < size(), "vec3 coordinate index out of range");
+            if constexpr (Index == 0)
+                return self.x;
+            else if constexpr (Index == 1)
+                return self.y;
+            else
+                return self.z;
+        }
+
+        template <int Index> constexpr T& coordinate() noexcept { return coordinateOf<Index>(*this); }
+        template <int Index> constexpr const T& coordinate() const noexcept { return coordinateOf<Index>(*this); }
     };
 #endif //GFXMATH_VEC3
 
@@ -2306,13 +2342,13 @@ namespace dex
         constexpr float getB10() const { return std::bit_cast<float>(0x3f800000u | (b10 << 13)) - 1; }
         /// @brief Store a fraction in the auxiliary R10 field without replacing the numeric RGB coordinates.
         /// @pre The input is finite and lies in [0, 1).
-        forcedinline void setR10(float r) { r10 = (std::bit_cast<uint32_t>(r + 1) & 0x007fe000u) >> 13; }
+        forcedinline void setR10(float channel) { r10 = (std::bit_cast<uint32_t>(channel + 1) & 0x007fe000u) >> 13; }
         /// @brief Store a fraction in the auxiliary G10 field without replacing the numeric RGB coordinates.
         /// @pre The input is finite and lies in [0, 1).
-        forcedinline void setG10(float g) { g10 = (std::bit_cast<uint32_t>(g + 1) & 0x007fe000u) >> 13; }
+        forcedinline void setG10(float channel) { g10 = (std::bit_cast<uint32_t>(channel + 1) & 0x007fe000u) >> 13; }
         /// @brief Store a fraction in the auxiliary B10 field without replacing the numeric RGB coordinates.
         /// @pre The input is finite and lies in [0, 1).
-        forcedinline void setB10(float b) { b10 = (std::bit_cast<uint32_t>(b + 1) & 0x007fe000u) >> 13; }
+        forcedinline void setB10(float channel) { b10 = (std::bit_cast<uint32_t>(channel + 1) & 0x007fe000u) >> 13; }
 
         /// @brief Construct a zero vector in every coordinate and independent lane.
         constexpr vec4() : x(0), y(0), z(0), w(0) {}
@@ -2340,6 +2376,10 @@ namespace dex
         constexpr vec4(T x, const vec3<T> v3) : x(x), y(v3.x), z(v3.y), w(v3.z) {}
         /// @brief Assemble coordinates in argument order; omitted trailing coordinates are zero.
         constexpr vec4(const vec3<T> v3, T w = {}) : x(v3.x), y(v3.y), z(v3.z), w(w) {}
+        /// @brief Append W to a packed or padded XYZ vector.
+        template <vec3_layout Layout>
+            requires (Layout != vec3_layout::legacy)
+        constexpr explicit vec4(const vec3<T, Layout>& v3, T w = {}) : x(v3.x), y(v3.y), z(v3.z), w(w) {}
 #endif
         /// @brief Construct a scalar-component spatial vector from its native four-coordinate VCL representation.
         template <typename Q = T, typename std::enable_if_t<std::is_arithmetic_v<Q>, bool> = true>
@@ -2349,6 +2389,7 @@ namespace dex
         /// @brief Copy compatible coordinates, converting scalar precision or broadcasting scalar coordinates when
         /// needed.
         constexpr vec4(const vec4& v) : x(v.x), y(v.y), z(v.z), w(v.w) {}
+        constexpr vec4& operator=(const vec4&) = default;
         /// @brief Copy compatible coordinates, converting scalar precision or broadcasting scalar coordinates when
         /// needed.
         template <typename Q = T, typename std::enable_if_t<!std::is_arithmetic_v<Q>, bool> = true>
@@ -2361,7 +2402,7 @@ namespace dex
         /// needed.
         template <typename FP,
             typename std::enable_if_t<!std::is_same_v<T, FP> && std::is_floating_point_v<T> && std::is_floating_point_v<FP>, bool> = true>
-        constexpr vec4(const vec4<FP>& v) : x(v.x), y(v.y), z(v.z), w(v.w)
+        constexpr vec4(const vec4<FP>& v) : x(T(v.x)), y(T(v.y)), z(T(v.z)), w(T(v.w))
         {
         }
         /// @brief Construct from exactly 4 coordinate objects in memory.
@@ -2376,17 +2417,17 @@ namespace dex
 
         /// @brief Replace one independent spatial SIMD lane; scalar-component vectors replace the whole value.
         /// @pre index is a valid zero-based independent lane index; use zero for a scalar-component vector.
-        forcedinline void insert(int index, const vec4<Scalar>& value)
+        forcedinline void insert(int index, const vec4<Scalar>& point)
         {
             if constexpr (elements_v<T> > 1)
             {
-                x.insert(index, value.x);
-                y.insert(index, value.y);
-                z.insert(index, value.z);
-                w.insert(index, value.w);
+                x.insert(index, point.x);
+                y.insert(index, point.y);
+                z.insert(index, point.z);
+                w.insert(index, point.w);
             }
             else
-                *this = value;
+                *this = point;
         }
 
         /// @brief Copy one independent spatial SIMD lane; scalar-component vectors return the whole value.
@@ -4648,10 +4689,10 @@ namespace dex
         /// @pre arr supplies at least 4 readable double objects.
         template <typename F = float> forcedinline void load(typename std::enable_if_t<std::is_same_v<T, F>, const double*> arr) noexcept
         {
-            x = arr[0];
-            y = arr[1];
-            z = arr[2];
-            w = arr[3];
+            x = T(arr[0]);
+            y = T(arr[1]);
+            z = T(arr[2]);
+            w = T(arr[3]);
         }
 
         /// @brief Return the scalar/VCL floating element-type code for this coordinate type.
@@ -4756,9 +4797,10 @@ namespace dex
 #if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
     /// @brief Select all coordinates from a when the mask is true, otherwise from b, independently in each member
     /// lane.
-    template <typename T> forcedinline vec3<T> select(const BoolType<T> s, const vec3<T>& a, const vec3<T>& b)
+    template <typename T, vec3_layout Layout, vec3_layout Other>
+    forcedinline vec3<T, Layout> select(const BoolType<T> s, const vec3<T, Layout>& a, const vec3<T, Other>& b)
     {
-        vec3<T> r;
+        vec3<T, Layout> r;
         r.x = select(s, a.x, b.x);
         r.y = select(s, a.y, b.y);
         r.z = select(s, a.z, b.z);
@@ -4766,75 +4808,89 @@ namespace dex
     }
 
     /// @brief Negate all coordinates in selected independent member lanes, preserving unselected lanes.
-    template <typename T> forcedinline vec3<T> if_changeSign(const BoolType<T> s, const vec3<T>& a)
+    template <typename T, vec3_layout Layout> forcedinline vec3<T, Layout> if_changeSign(const BoolType<T> s, const vec3<T, Layout>& a)
     {
         return select(s, -a, a);
     }
 
     /// @brief Apply left-hand + to each coordinate of b, independently in every member lane.
-    template <typename T> forcedinline const vec3<T> operator+(std::type_identity_t<T> a, const vec3<T>& b) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> operator+(std::type_identity_t<T> a, const vec3<T, Layout>& b) noexcept
     {
         return {a + b.x, a + b.y, a + b.z};
     }
     /// @brief Apply left-hand - to each coordinate of b, independently in every member lane.
-    template <typename T> forcedinline const vec3<T> operator-(std::type_identity_t<T> a, const vec3<T>& b) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> operator-(std::type_identity_t<T> a, const vec3<T, Layout>& b) noexcept
     {
         return {a - b.x, a - b.y, a - b.z};
     }
     /// @brief Apply left-hand * to each coordinate of b, independently in every member lane.
-    template <typename T> forcedinline const vec3<T> operator*(std::type_identity_t<T> a, const vec3<T>& b) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> operator*(std::type_identity_t<T> a, const vec3<T, Layout>& b) noexcept
     {
         return {a * b.x, a * b.y, a * b.z};
     }
     /// @brief Apply left-hand / to each coordinate of b, independently in every member lane.
     /// @note A zero denominator coordinate produces 1/Epsilon<Scalar>, rather than infinity.
-    template <typename T> forcedinline const vec3<T> operator/(std::type_identity_t<T> a, const vec3<T>& b) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> operator/(std::type_identity_t<T> a, const vec3<T, Layout>& b) noexcept
     {
         auto m = T(1) / std::numeric_limits<Scalar_t<T>>::epsilon();
         return {select(b.x != 0, a / b.x, m), select(b.y != 0, a / b.y, m), select(b.z != 0, a / b.z, m)};
     }
 
     /// @brief Return coordinate-wise minima, separately in each independent member lane.
-    template <typename T> forcedinline const vec3<T> min(const vec3<T>& a, const vec3<T>& b) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> min(const vec3<T, Layout>& a, const vec3<T, Layout>& b) noexcept
     {
         return {min(a.x, b.x), min(a.y, b.y), min(a.z, b.z)};
     }
+    /// @brief Apply min to corresponding XYZ coordinates and return the first operand's layout.
+    template <typename T, vec3_layout Layout, vec3_layout Other>
+        requires (Other != Layout)
+    forcedinline const vec3<T, Layout> min(const vec3<T, Layout>& a, const vec3<T, Other>& b) noexcept
+    {
+        return min(a, vec3<T, Layout>(b));
+    }
     /// @brief Return coordinate-wise minima, separately in each independent member lane.
-    template <typename T> forcedinline const vec3<T> min(const vec3<T>& a, T b) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> min(const vec3<T, Layout>& a, T b) noexcept
     {
         return {min(a.x, b), min(a.y, b), min(a.z, b)};
     }
     /// @brief Reduce spatial coordinates to their minimum in each independent member lane.
-    template <typename T> forcedinline const T horizontal_min(const vec3<T>& a) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const T horizontal_min(const vec3<T, Layout>& a) noexcept
     {
         return min(a.x, a.y, a.z);
     }
 
     /// @brief Return coordinate-wise maxima, separately in each independent member lane.
-    template <typename T> forcedinline const vec3<T> max(const vec3<T>& a, const vec3<T>& b) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> max(const vec3<T, Layout>& a, const vec3<T, Layout>& b) noexcept
     {
         return {max(a.x, b.x), max(a.y, b.y), max(a.z, b.z)};
     }
+    /// @brief Apply max to corresponding XYZ coordinates and return the first operand's layout.
+    template <typename T, vec3_layout Layout, vec3_layout Other>
+        requires (Other != Layout)
+    forcedinline const vec3<T, Layout> max(const vec3<T, Layout>& a, const vec3<T, Other>& b) noexcept
+    {
+        return max(a, vec3<T, Layout>(b));
+    }
     /// @brief Return coordinate-wise maxima, separately in each independent member lane.
-    template <typename T> forcedinline const vec3<T> max(const vec3<T>& a, T b) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> max(const vec3<T, Layout>& a, T b) noexcept
     {
         return {max(a.x, b), max(a.y, b), max(a.z, b)};
     }
     /// @brief Reduce spatial coordinates to their maximum in each independent member lane.
-    template <typename T> forcedinline const T horizontal_max(const vec3<T>& a) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const T horizontal_max(const vec3<T, Layout>& a) noexcept
     {
         return max(a.x, a.y, a.z);
     }
 
     /// @brief Sum spatial coordinates separately within each independent member lane.
-    template <typename T> forcedinline const T add(const vec3<T>& a) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const T add(const vec3<T, Layout>& a) noexcept
     {
         return a.x + a.y + a.z;
     }
 
     /// @brief Return numeric one at the first largest coordinate in each lane and zero elsewhere; ties prefer
     /// earlier coordinates.
-    template <typename T> forcedinline const vec3<T> max1(const vec3<T>& a) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> max1(const vec3<T, Layout>& a) noexcept
     {
         auto m = horizontal_max(a);
         auto bx = a.x == m, by = a.y == m, bz = a.z == m;
@@ -5137,103 +5193,101 @@ namespace dex
 
 #if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
     /// @brief Return the absolute value of each coordinate independently in every member lane.
-    template <typename T> forcedinline const vec3<T> abs(const vec3<T>& a) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> abs(const vec3<T, Layout>& a) noexcept
     {
         using std::abs;
         return {abs(a.x), abs(a.y), abs(a.z)};
     }
     /// @brief Return the natural exponential of each coordinate independently in every member lane.
-    template <typename T> forcedinline const vec3<T> exp(const vec3<T>& a) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> exp(const vec3<T, Layout>& a) noexcept
     {
         using std::exp;
         return {exp(a.x), exp(a.y), exp(a.z)};
     }
     /// @brief Return the square root of each coordinate independently in every member lane.
-    template <typename T> forcedinline const vec3<T> sqrt(const vec3<T>& a) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> sqrt(const vec3<T, Layout>& a) noexcept
     {
         using std::sqrt;
         return {sqrt(a.x), sqrt(a.y), sqrt(a.z)};
     }
     /// @brief Return the sine of each coordinate, interpreted in radians, independently in every member lane.
-    template <typename T> forcedinline const vec3<T> sin(const vec3<T>& a) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> sin(const vec3<T, Layout>& a) noexcept
     {
         using std::sin;
         return {sin(a.x), sin(a.y), sin(a.z)};
     }
     /// @brief Return the cosine of each coordinate, interpreted in radians, independently in every member lane.
-    template <typename T> forcedinline const vec3<T> cos(const vec3<T>& a) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> cos(const vec3<T, Layout>& a) noexcept
     {
         using std::cos;
         return {cos(a.x), cos(a.y), cos(a.z)};
     }
     /// @brief Apply the default reciprocal-root-based square-root approximation to each coordinate and member lane.
     /// @pre Coordinates are positive finite normal values within the approximation's useful domain.
-    template <typename T> forcedinline const vec3<T> approx_sqrt(const vec3<T>& a) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> approx_sqrt(const vec3<T, Layout>& a) noexcept
     {
         return {approx_sqrt(a.x), approx_sqrt(a.y), approx_sqrt(a.z)};
     }
 
     /// @brief Return numeric -1 for negative inputs and +1 otherwise, including zero, coordinate-wise and
     /// lane-wise.
-    template <typename T> forcedinline const vec3<T> sign(const vec3<T>& a) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> sign(const vec3<T, Layout>& a) noexcept
     {
-        return {select(a.x < 0, -1, 1), select(a.y < 0, -1, 1), select(a.z < 0, -1, 1)};
-    }
-    /// @brief Return numeric -1 for negative inputs and +1 otherwise, including zero, coordinate-wise and
-    /// lane-wise.
-    template <> forcedinline const vec3<float> sign(const vec3<float>& a) noexcept
-    {
-        return vec3<float>{sign(a.x), sign(a.y), sign(a.z)};
-    }
-    /// @brief Return numeric -1 for negative inputs and +1 otherwise, including zero, coordinate-wise and
-    /// lane-wise.
-    template <> forcedinline const vec3<double> sign(const vec3<double>& a) noexcept
-    {
-        return vec3<double>{sign(a.x), sign(a.y), sign(a.z)};
+        if constexpr (std::is_floating_point_v<T>)
+            return {sign(a.x), sign(a.y), sign(a.z)};
+        else
+            return {select(a.x < T(0), T(-1), T(1)), select(a.y < T(0), T(-1), T(1)), select(a.z < T(0), T(-1), T(1))};
     }
 
     /// @brief Return numeric one where b >= a and zero otherwise, coordinate-wise and lane-wise.
-    template <typename T> forcedinline const vec3<T> step(const vec3<T>& a, const vec3<T>& b) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> step(const vec3<T, Layout>& a, const vec3<T, Layout>& b) noexcept
     {
-        return {T(select(b.x < a.x, 0, 1)), T(select(b.y < a.y, 0, 1)), T(select(b.z < a.z, 0, 1))};
+        if constexpr (std::is_floating_point_v<T>)
+            return {T(b.x >= a.x), T(b.y >= a.y), T(b.z >= a.z)};
+        else
+            return {select(b.x < a.x, T(0), T(1)), select(b.y < a.y, T(0), T(1)), select(b.z < a.z, T(0), T(1))};
     }
-    /// @brief Return numeric one where b >= a and zero otherwise, coordinate-wise and lane-wise.
-    template <> forcedinline const vec3<float> step(const vec3<float>& a, const vec3<float>& b) noexcept
+    /// @brief Apply step to corresponding XYZ coordinates and return the first operand's layout.
+    template <typename T, vec3_layout Layout, vec3_layout Other>
+        requires (Other != Layout)
+    forcedinline const vec3<T, Layout> step(const vec3<T, Layout>& a, const vec3<T, Other>& b) noexcept
     {
-        return {float(b.x >= a.x), float(b.y >= a.y), float(b.z >= a.z)};
-    }
-    /// @brief Return numeric one where b >= a and zero otherwise, coordinate-wise and lane-wise.
-    template <> forcedinline const vec3<double> step(const vec3<double>& a, const vec3<double>& b) noexcept
-    {
-        return {double(b.x >= a.x), double(b.y >= a.y), double(b.z >= a.z)};
+        return step(a, vec3<T, Layout>(b));
     }
 
     /// @brief Raise each coordinate of a to the corresponding exponent in b, independently in every member lane.
-    template <typename T> forcedinline const vec3<T> pow(const vec3<T>& a, const vec3<T>& b) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> pow(const vec3<T, Layout>& a, const vec3<T, Layout>& b) noexcept
     {
         using std::pow;
         return {pow(a.x, b.x), pow(a.y, b.y), pow(a.z, b.z)};
     }
+    /// @brief Apply pow to corresponding XYZ coordinates and return the first operand's layout.
+    template <typename T, vec3_layout Layout, vec3_layout Other>
+        requires (Other != Layout)
+    forcedinline const vec3<T, Layout> pow(const vec3<T, Layout>& a, const vec3<T, Other>& b) noexcept
+    {
+        return pow(a, vec3<T, Layout>(b));
+    }
     /// @brief Raise each coordinate of a to exponent b, independently in every member lane.
-    template <typename T> forcedinline const vec3<T> pow(const vec3<T>& a, T b) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> pow(const vec3<T, Layout>& a, T b) noexcept
     {
         using std::pow;
         return {pow(a.x, b), pow(a.y, b), pow(a.z, b)};
     }
 
     /// @brief Truncate every coordinate toward zero, independently in every member lane.
-    template <typename T> forcedinline const vec3<T> trunc(const vec3<T>& a) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> trunc(const vec3<T, Layout>& a) noexcept
     {
         return {dex::trunc(a.x), dex::trunc(a.y), dex::trunc(a.z)};
     }
     /// @brief Round every coordinate downward, independently in every member lane.
-    template <typename T> forcedinline const vec3<T> floor(const vec3<T>& a) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> floor(const vec3<T, Layout>& a) noexcept
     {
         using std::floor;
         return {floor(a.x), floor(a.y), floor(a.z)};
     }
     /// @brief Round every coordinate upward, independently in every member lane.
-    template <typename T> forcedinline const vec3<T> ceil(const vec3<T>& a) noexcept
+    template <typename T, vec3_layout Layout> forcedinline const vec3<T, Layout> ceil(const vec3<T, Layout>& a) noexcept
     {
         using std::ceil;
         return {ceil(a.x), ceil(a.y), ceil(a.z)};
@@ -5503,31 +5557,27 @@ namespace dex
     /// @brief 3-coordinate spatial vector with 8 independent lanes of double.
 	using vec3d8 = vec3dN<8>;
 
-    /// @brief Expose the underlying scalar precision of this spatial-vector alias.
-	template <> struct Scalar<vec3f> { using type = float; };
-    /// @brief Expose the underlying scalar precision of this spatial-vector alias.
-	template <> struct Scalar<vec3f4> { using type = float; };
-    /// @brief Expose the underlying scalar precision of this spatial-vector alias.
-	template <> struct Scalar<vec3f8> { using type = float; };
-    /// @brief Expose the underlying scalar precision of this spatial-vector alias.
-	template <> struct Scalar<vec3d> { using type = double; };
-    /// @brief Expose the underlying scalar precision of this spatial-vector alias.
-	template <> struct Scalar<vec3d4> { using type = double; };
-    /// @brief Expose the underlying scalar precision of this spatial-vector alias.
-	template <> struct Scalar<vec3d8> { using type = double; };
+    /// @brief Scalar XYZ stored as exactly three elements of type T.
+    template <typename T> using vec3_packed = vec3<T, vec3_layout::packed>;
+    /// @brief Scalar XYZ followed by one reserved element of type T.
+    template <typename T> using vec3_padded = vec3<T, vec3_layout::padded>;
+    using vec3fpc = vec3_packed<float>;
+    using vec3dpc = vec3_packed<double>;
+    using vec3fpd = vec3_padded<float>;
+    using vec3dpd = vec3_padded<double>;
 
-    /// @brief Return the supplied value in its existing float precision.
-    /// @param v Value to convert or return; independent component lanes are preserved.
-	forcedinline vec3f toFloat(vec3f v) noexcept { return v; }
-    /// @brief Convert spatial coordinates to float precision.
-    /// @param v Value to convert or return; independent component lanes are preserved.
-	forcedinline vec3f toFloat(vec3d v) noexcept { return vec3f{ float(v.x), float(v.y), float(v.z) }; }
-    /// @brief Convert spatial coordinates to double precision.
-    /// @param v Value to convert or return; independent component lanes are preserved.
-	forcedinline vec3d toDouble(vec3f v) noexcept { return vec3d{ v.x, v.y, v.z }; }
-    /// @brief Return the supplied value in its existing double precision.
-    /// @param v Value to convert or return; independent component lanes are preserved.
-	forcedinline vec3d toDouble(vec3d v) noexcept { return v; }
+    /// @brief Expose the underlying scalar precision of any vec3 layout.
+    template <typename T, vec3_layout Layout> struct Scalar<vec3<T, Layout>>
+    {
+        using type = Scalar_t<T>;
+    };
+
+    /// @brief Convert XYZ to float precision while preserving the layout.
+    template <vec3_layout Layout> forcedinline vec3<float, Layout> toFloat(vec3<float, Layout> v) noexcept { return v; }
+    template <vec3_layout Layout> forcedinline vec3<float, Layout> toFloat(vec3<double, Layout> v) noexcept { return v; }
+    /// @brief Convert XYZ to double precision while preserving the layout.
+    template <vec3_layout Layout> forcedinline vec3<double, Layout> toDouble(vec3<float, Layout> v) noexcept { return v; }
+    template <vec3_layout Layout> forcedinline vec3<double, Layout> toDouble(vec3<double, Layout> v) noexcept { return v; }
 
     /// @brief Select a spatial vector whose components use Vector_t<T, N>.
     /// @tparam T Scalar component precision or an already packed component type.
@@ -6313,9 +6363,22 @@ namespace dex
         /// @return XYZ for vec3 input, or all four output coordinates for vec4 input.
         forcedinline vec3<T> transformPoint(const vec3<T> v) const noexcept
         {
-            vec3<T> result;
-            multiply(vec4<T>(v, T(1))).vcl.store_partial(3, &result.x);
-            return result;
+            return transformPoint<vec3_layout::legacy>(v);
+        }
+
+        /// @brief Transform XYZ as a point (W = 1), preserving the input layout.
+        template <vec3_layout Layout>
+        forcedinline vec3<T, Layout> transformPoint(const vec3<T, Layout>& v) const noexcept
+        {
+            const auto result = multiply(Vector_t<T, 4>(v.x, v.y, v.z, T(1)));
+            return {result.extract(0), result.extract(1), result.extract(2)};
+        }
+
+        /// @brief Transform XYZ as a point, without homogeneous division.
+        template <vec3_layout Layout>
+        forcedinline vec3<T, Layout> operator*(const vec3<T, Layout>& v) const noexcept
+        {
+            return transformPoint<Layout>(v);
         }
 
         /// @brief Transform a point with input W forced to one, without homogeneous division.
@@ -6373,12 +6436,12 @@ namespace dex
         /// @param v Input point or four-lane point batch.
         /// @pre Each computed output W is finite and nonzero.
         /// @return Cartesian coordinates in input/output precision F.
-        template <typename F> forcedinline vec3<F> transformPointCartesian(const vec3<F> v) const noexcept
+        template <typename F, vec3_layout Layout = vec3_layout::legacy>
+        forcedinline vec3<F, Layout> transformPointCartesian(const vec3<F, Layout> v) const noexcept
         {
-            vec3<F> result;
-            auto r = multiply(vec4<F>(v, 1));
-            to_type<F>(r / permute4<3, 3, 3, 3>(r.vcl)).vcl.store_partial(3, &result.x);
-            return result;
+            const auto r = multiply(Vector_t<T, 4>(T(v.x), T(v.y), T(v.z), T(1)));
+            const auto result = r / permute4<3, 3, 3, 3>(r);
+            return {F(result.extract(0)), F(result.extract(1)), F(result.extract(2))};
         }
 
         /// @brief Transform a point with input W one and divide by computed output W.
@@ -6422,8 +6485,8 @@ namespace dex
                 auto r1 = c0 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vx) + c1 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vy) +
                           c2 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vz) + c3 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vw);
 
-                auto q0 = blend8<0, 4, 8, 12, 1, 5, 9, 13>(r0, r1);
-                auto q1 = blend8<2, 6, 10, 14, 3, 7, 11, 15>(r0, r1);
+                const auto q0 = gatherTransformCoordinates<0>(r0, r1);
+                const auto q1 = gatherTransformCoordinates<2>(r0, r1);
 
                 to_type<F>(q0 / permute8<4, 5, 6, 7, 4, 5, 6, 7>(q1)).store(reinterpret_cast<F*>(&result.x));
                 to_type<F>(q1 / permute8<4, 5, 6, 7, 4, 5, 6, 7>(q1)).store_partial(4, reinterpret_cast<F*>(&result.z));
@@ -6435,7 +6498,8 @@ namespace dex
         /// @param v Direction coordinates; supplied W is ignored.
         /// @return Direction result converted to precision F.
         /// @note This does not perform the inverse-transpose operation needed for general normals.
-        template <typename F> forcedinline vec3<F> transformDir(const vec3<F> v) const noexcept
+        template <typename F, vec3_layout Layout = vec3_layout::legacy>
+        forcedinline vec3<F, Layout> transformDir(const vec3<F, Layout> v) const noexcept
         {
             const auto input = vec4<T>(T(v.x), T(v.y), T(v.z), T(0));
             const auto result = multiply(input);
@@ -6484,8 +6548,8 @@ namespace dex
                 auto r1 = c0 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vx) + c1 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vy) +
                           c2 * permute8<2, 2, 2, 2, 3, 3, 3, 3>(vz);
 
-                auto q0 = blend8<0, 4, 8, 12, 1, 5, 9, 13>(r0, r1);
-                auto q1 = blend8<2, 6, 10, 14, 3, 7, 11, 15>(r0, r1);
+                const auto q0 = gatherTransformCoordinates<0>(r0, r1);
+                const auto q1 = gatherTransformCoordinates<2>(r0, r1);
 
                 to_type<F>(q0).store(reinterpret_cast<F*>(reinterpret_cast<F*>(&result.x)));
                 to_type<F>(q1).store_partial(4, reinterpret_cast<F*>(&result.z));
@@ -6847,12 +6911,35 @@ namespace dex
             /// @brief Array overlay of the same four native columns; entries are columns, not rows.
             Vector_t<T, 4> col[4];
         };
+
+    private:
+        // Gather two consecutive coordinates across four points stored in two pairs.
+        template <int First>
+        static forcedinline Vector_t<T, 8> gatherTransformCoordinates(Vector_t<T, 8> a, Vector_t<T, 8> b) noexcept
+        {
+#if defined(_MSC_VER) && !defined(__clang__) && _MSC_VER >= 1950 && INSTRSET < 9
+            // MSVC 19.5x rejects the dependent array bound in VCL's emulated Vec8d blend.
+            if constexpr (std::is_same_v<T, double>)
+            {
+                const auto first = blend4<First, First + 4, First + 1, First + 5>(a.get_low(), a.get_high());
+                const auto second = blend4<First, First + 4, First + 1, First + 5>(b.get_low(), b.get_high());
+                return {blend4<0, 1, 4, 5>(first, second), blend4<2, 3, 6, 7>(first, second)};
+            }
+            else
+#endif
+            {
+                return blend8<First, First + 4, First + 8, First + 12,
+                    First + 1, First + 5, First + 9, First + 13>(a, b);
+            }
+        }
     };
 
     /// @brief Four-column float transform matrix; default construction leaves columns uninitialized.
     using Matrix4f = Matrix4<float>;
     /// @brief Four-column double transform matrix; default construction leaves columns uninitialized.
     using Matrix4d = Matrix4<double>;
+    using matrix4f = Matrix4f;
+    using matrix4d = Matrix4d;
 #endif //Matrix4
 
 #if defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)
@@ -7166,10 +7253,9 @@ namespace dex
     /// @brief Return 2 deterministic procedural hash component(s) from 3 input component(s).
     /// @param p Finite input of moderate magnitude; packed lanes are processed independently.
     /// @note Truncation-based fract permits negative outputs. This is not cryptographic hashing.
-	template <typename T>
-	static forcedinline vec2<T> hash23(const vec3<T> p)
+	template <typename T, vec3_layout Layout> static forcedinline vec2<T> hash23(const vec3<T, Layout> p)
 	{
-		vec3<T> p3 = fract(p * vec3<T>(T(0.1031f), T(0.1030f), T(0.0973f)));
+		vec3<T, Layout> p3 = fract(p * vec3<T, Layout>(T(0.1031f), T(0.1030f), T(0.0973f)));
 		p3 += p3.dot(p3.yzx() + T(33.33f));
 		return fract((p3.xx() + p3.yz()) * p3.zy());
 	}
@@ -7178,10 +7264,9 @@ namespace dex
     /// @brief Return 3 deterministic procedural hash component(s) from 2 input component(s).
     /// @param p Finite input of moderate magnitude; packed lanes are processed independently.
     /// @note Truncation-based fract permits negative outputs. This is not cryptographic hashing.
-	template <typename T>
-	static forcedinline vec3<T> hash32(const vec2<T> p)
+	template <typename T, vec3_layout Layout> static forcedinline vec3<T, Layout> hash32(const vec2<T> p)
     {
-        vec3<T> p3 = fract(vec3<T>(p.x, p.y, p.x) * vec3<T>(T(0.1031f), T(0.1030f), T(0.0973f)));
+        vec3<T, Layout> p3 = fract(vec3<T, Layout>(p.x, p.y, p.x) * vec3<T, Layout>(T(0.1031f), T(0.1030f), T(0.0973f)));
         p3 += p3.dot(p3.yxz() + T(33.33f));
         return fract((p3.xxy() + p3.yzz()) * p3.zyx());
     }
@@ -7207,8 +7292,7 @@ namespace dex
     /// @brief Return 4 deterministic procedural hash component(s) from 3 input component(s).
     /// @param p Finite input of moderate magnitude; packed lanes are processed independently.
     /// @note Truncation-based fract permits negative outputs. This is not cryptographic hashing.
-	template <typename T>
-	static forcedinline vec4<T> hash43(const vec3<T> p)
+	template <typename T, vec3_layout Layout> static forcedinline vec4<T> hash43(const vec3<T, Layout> p)
 	{
 		vec4<T> p4 = fract(vec4<T>(p.x, p.y, p.z, p.x) * vec4<T>(T(0.1031f), T(0.1030f), T(0.0973f), T(0.1099f)));
 		p4 += p4.dot(p4.wzxy() + T(33.33f));
@@ -7221,10 +7305,9 @@ namespace dex
     /// @brief Return 1 deterministic procedural hash component(s) from 3 input component(s).
     /// @param p Finite input of moderate magnitude; packed lanes are processed independently.
     /// @note Truncation-based fract permits negative outputs. This is not cryptographic hashing.
-	template <typename T>
-	static forcedinline T hash13(const vec3<T> p)
+	template <typename T, vec3_layout Layout> static forcedinline T hash13(const vec3<T, Layout> p)
 	{
-		vec3<T> p3 = fract(p * T(0.1031f));
+		vec3<T, Layout> p3 = fract(p * T(0.1031f));
 		p3 += p3.dot(p3.zyx() + T(31.32f));
 		return fract((p3.x + p3.y) * p3.z);
 	}
@@ -7233,10 +7316,9 @@ namespace dex
     /// @brief Return 3 deterministic procedural hash component(s) from 1 input component(s).
     /// @param p Finite input of moderate magnitude; packed lanes are processed independently.
     /// @note Truncation-based fract permits negative outputs. This is not cryptographic hashing.
-	template <typename T>
-	static forcedinline vec3<T> hash31(T p)
+	template <typename T, vec3_layout Layout> static forcedinline vec3<T, Layout> hash31(T p)
 	{
-		vec3<T> p3 = fract(vec3<T>(p) * vec3<T>(T(0.1031f), T(0.1030f), T(0.0973f)));
+		vec3<T, Layout> p3 = fract(vec3<T, Layout>(p) * vec3<T, Layout>(T(0.1031f), T(0.1030f), T(0.0973f)));
 		p3 += p3.dot(p3.yzx() + T(33.33f));
 		return fract((p3.xxy() + p3.yzz()) * p3.zyx());
 	}
@@ -7245,10 +7327,9 @@ namespace dex
     /// @brief Return 3 deterministic procedural hash component(s) from 3 input component(s).
     /// @param p Finite input of moderate magnitude; packed lanes are processed independently.
     /// @note Truncation-based fract permits negative outputs. This is not cryptographic hashing.
-	template <typename T>
-	static forcedinline vec3<T> hash33(const vec3<T> p)
+	template <typename T, vec3_layout Layout> static forcedinline vec3<T, Layout> hash33(const vec3<T, Layout> p)
 	{
-		vec3<T> p3 = fract(p * vec3<T>(T(0.1031f), T(0.1030f), T(0.0973f)));
+		vec3<T, Layout> p3 = fract(p * vec3<T, Layout>(T(0.1031f), T(0.1030f), T(0.0973f)));
 		p3 += p3.dot(p3.yxz() + T(33.33f));
 		return fract((p3.xxy() + p3.yxx()) * p3.zyx());
 
@@ -7353,7 +7434,7 @@ namespace dex
         /// @param yDim Nonnegative height in elements.
         /// @param defaultValue Value returned by checked out-of-bounds access.
 		Map2D(T* dataArray, int xDim, int yDim, T defaultValue = {}) :
-			data(dataArray), xdim(xDim), ydim(yDim), defValue(defaultValue)
+			data(dataArray), defValue(defaultValue), xdim(xDim), ydim(yDim)
 		{
 		}
 

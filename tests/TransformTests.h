@@ -570,16 +570,17 @@ namespace gfxmath_tests
                 const double halfAngle = lane(angle, i) * fraction * 0.5;
                 return d == 2 ? std::sin(halfAngle) : d == 3 ? std::cos(halfAngle) : 0;
             };
-            expectVector(context, Q::slerp(identity, rotation, T(fraction)).q, expected, error, "static spherical interpolation");
+            const T weight{Scalar<T>(fraction)};
+            expectVector(context, Q::slerp(identity, rotation, weight).q, expected, error, "static spherical interpolation");
             Q mutableIdentity;
-            mutableIdentity.slerp(rotation, T(fraction));
+            mutableIdentity.slerp(rotation, weight);
             expectVector(context, mutableIdentity.q, expected, error, "mutating spherical interpolation");
             const Q negativeTarget(-rotation.q);
-            expectVector(context, Q::slerp(identity, negativeTarget, T(fraction)).q, expected, error,
+            expectVector(context, Q::slerp(identity, negativeTarget, weight).q, expected, error,
                 "shortest-path interpolation handles negative quaternion");
         }
 
-        const Q tiny = Q::fromAxisAngle(V(T(0), T(0), T(1), T(0)), T(0.001));
+        const Q tiny = Q::fromAxisAngle(V(T(0), T(0), T(1), T(0)), T(Scalar<T>(0.001)));
         const Q midpoint = Q::slerp(identity, tiny, T(0.5));
         expectVector(
             context, midpoint.q,

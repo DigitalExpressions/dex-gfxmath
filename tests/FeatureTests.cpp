@@ -10,6 +10,8 @@ static_assert(dex::vec2d8::size() == 2);
 #if defined(GFXMATH_VEC3) || defined(GFXMATH_ALL)
 static_assert(dex::vec3f::size() == 3);
 static_assert(dex::vec3d8::size() == 3);
+static_assert(sizeof(dex::vec3fpc) == 3 * sizeof(float));
+static_assert(sizeof(dex::vec3dpd) == 4 * sizeof(double));
 #endif
 
 #if defined(GFXMATH_VEC4) || defined(GFXMATH_ALL)

@@ -34,12 +34,27 @@ run from this repository:
 ```powershell
 cmake -S . -B build-tests -A x64 `
     -DGFXMATH_VECTORCLASS_DIR=C:/path/to/vectorclass `
-    -DGFXMATH_FETCH_VECTORCLASS=OFF
+    -DGFXMATH_FETCH_VECTORCLASS=OFF `
+    -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
 cmake --build build-tests --config Debug --parallel 2
 ctest --test-dir build-tests -C Debug --output-on-failure
 cmake --build build-tests --config Release --parallel 2
 ctest --test-dir build-tests -C Release --output-on-failure
 ```
+
+For Clang on Windows, configure a separate build with the Visual Studio Clang
+toolset installed:
+
+```powershell
+cmake -S . -B build/tests-clang -A x64 -T ClangCL `
+    -DGFXMATH_VECTORCLASS_DIR=C:/path/to/vectorclass `
+    -DGFXMATH_FETCH_VECTORCLASS=OFF `
+    -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
+cmake --build build/tests-clang --config Release --parallel 2
+ctest --test-dir build/tests-clang -C Release --output-on-failure
+```
+
+CMake 3.24 or later supports `CMAKE_COMPILE_WARNING_AS_ERROR`.
 
 `GFXMATH_VECTORCLASS_DIR` must contain `vectorclass.h`. If omitted, CMake searches
 the sibling `vectorclass` directory and standard include locations. Otherwise,
@@ -51,6 +66,8 @@ active in Release independently of `assert`/`NDEBUG`.
 
 `gfxmath.unit` exercises float/double and all supported packed member widths:
 float4/8/16 and double2/4/8. VCL emulates the largest widths on this target.
+It also checks scalar vec3 storage, mixed-layout operations, and matrix
+multiplication with legacy, packed, and padded inputs.
 All advertised feature macros also have standalone compilation smoke targets.
 `gfxmath.sign` checks scalar and SIMD sign results, including signed zero and
 scalar NaN behavior. Its MSVC build treats narrowing warning C4244 as an error.

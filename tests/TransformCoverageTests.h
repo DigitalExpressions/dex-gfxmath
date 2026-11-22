@@ -60,7 +60,8 @@ namespace gfxmath_tests
         Matrix mutableMatrix;
         context.expect(&(mutableMatrix = original) == &mutableMatrix, "matrix assignment returns self");
         expectMatrix(context, mutableMatrix, reference, 0, "matrix assignment writes every column");
-        mutableMatrix = mutableMatrix;
+        const Matrix& sameMatrix = mutableMatrix;
+        mutableMatrix = sameMatrix;
         expectMatrix(context, mutableMatrix, reference, 0, "matrix self-assignment preserves columns");
         context.expect(&mutableMatrix.setIdentity() == &mutableMatrix, "setIdentity returns self");
         expectMatrix(context, mutableMatrix, identity, 0, "default construction followed by explicit identity initialization");
@@ -258,7 +259,8 @@ namespace gfxmath_tests
         Q mutableQuaternion;
         context.expect(&(mutableQuaternion = original) == &mutableQuaternion, "quaternion assignment returns self");
         expectVector(context, mutableQuaternion.q, expectedOriginal, 0, "quaternion assignment copies every lane");
-        mutableQuaternion = mutableQuaternion;
+        const Q& sameQuaternion = mutableQuaternion;
+        mutableQuaternion = sameQuaternion;
         expectVector(context, mutableQuaternion.q, expectedOriginal, 0, "quaternion self-assignment");
         const auto exactUnit = [&](int componentIndex, int laneIndex)
         {
