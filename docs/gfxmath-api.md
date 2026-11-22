@@ -204,6 +204,24 @@ and transfer methods. The legacy layout continues to expose its union aliases.
 Rebuild consumers of a previous version because the `vec3` class template now
 includes a defaulted layout parameter.
 
+#### Choosing a layout
+
+| Start with | Typical use |
+| --- | --- |
+| `vec3f` / `vec3d` | Existing API signatures, code using the legacy color or texture fields, or code that accesses the VCL overlay. |
+| `vec3fpc` / `vec3dpc` | Dense arrays of positions, normals, particles, or point-cloud samples. Each record uses 25% less space than the padded form, so more points fit in the same memory and cache. |
+| `vec3fpd` / `vec3dpd` | A host buffer or data structure that calls for four scalar slots per record. Also benchmark this layout for hot transform or arithmetic loops where a four-slot stride could influence the compiler's loads and stores. |
+
+For an external format, check its stride, field offsets, and alignment
+separately. For example, `vec3fpd` has a 16-byte stride in an array and only
+float alignment. For explicit SIMD across several independent points, use a
+batched type such as `vec3f4` or `vec3f8`.
+
+On the benchmark machine, packed took 12–24% less time than legacy for
+large linear passes, with smaller gains for indexed reads. Small arrays
+produced closer results whose ordering varied by kernel and toolchain. See
+[the vec3 layout benchmark](../benchmarks/README.md) for results and instructions.
+
 ### Construction and public fields
 
 | Operation | `vec2<T>` | `vec3<T>` | `vec4<T>` |
