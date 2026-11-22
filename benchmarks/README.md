@@ -18,10 +18,18 @@ up to about 820 MiB of buffer storage. The benchmark runs on a single thread.
 
 ## Example results
 
-AMD Ryzen 9 7950X, Windows x64, Release with AVX2, MSVC 19.52 and
-Clang 22.1.3 (`clang-cl`). Each cell shows **legacy / packed / padded**
-in nanoseconds per point, using the median of three separate run medians.
-The checksums matched across layouts, compilers, and runs.
+AMD Ryzen 9 7950X, Windows x64, Release, MSVC 19.52 and Clang 22.1.3
+(`clang-cl`). Both compiler commands used `/O2 /Ob2 /arch:AVX2`.
+With this version of `clang-cl`, `/O2` selected LLVM `-O3`.
+
+Auto-vectorization was enabled on both compilers. The dot product and
+indexed distance use ordinary XYZ arithmetic, leaving SIMD selection to the
+compiler. The matrix transform uses GfxMath's explicit VCL SIMD path for
+all three layouts.
+
+Each cell shows **legacy / packed / padded** in nanoseconds per point,
+using the median of three separate run medians. The checksums matched
+across layouts, compilers, and runs.
 
 | Precision | Points | Kernel | MSVC | Clang |
 | --- | ---: | --- | ---: | ---: |
