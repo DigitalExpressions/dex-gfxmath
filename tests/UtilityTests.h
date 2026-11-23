@@ -11,6 +11,13 @@ namespace gfxmath_tests
         return value * 2;
     }
 
+    template <typename V, typename Scalar, typename Mask> constexpr bool integerTraits()
+    {
+        return std::is_same_v<dex::Scalar_t<V>, Scalar> && std::is_same_v<dex::BoolType<V>, Mask> &&
+               std::is_same_v<dex::BoolArray<V>, std::make_unsigned_t<Scalar>*> &&
+               dex::elements_v<V> == dex::elements_v<Mask>;
+    }
+
     inline void testSequencesAndTraits(TestContext& context)
     {
         using Sequence = std::integer_sequence<int, 3, -2, 7, 0>;
@@ -59,6 +66,18 @@ namespace gfxmath_tests
         static_assert(std::is_same_v<dex::BoolType<Vec16f>, Vec16fb>);
         static_assert(std::is_same_v<dex::BoolArray<Vec8d>, uint64_t*>);
         static_assert(std::is_same_v<dex::Bool_t<8>, Vec8fb>);
+        static_assert(integerTraits<Vec16c, int8_t, Vec16cb>() && integerTraits<Vec16uc, uint8_t, Vec16cb>());
+        static_assert(integerTraits<Vec32c, int8_t, Vec32cb>() && integerTraits<Vec32uc, uint8_t, Vec32cb>());
+        static_assert(integerTraits<Vec64c, int8_t, Vec64cb>() && integerTraits<Vec64uc, uint8_t, Vec64cb>());
+        static_assert(integerTraits<Vec8s, int16_t, Vec8sb>() && integerTraits<Vec8us, uint16_t, Vec8sb>());
+        static_assert(integerTraits<Vec16s, int16_t, Vec16sb>() && integerTraits<Vec16us, uint16_t, Vec16sb>());
+        static_assert(integerTraits<Vec32s, int16_t, Vec32sb>() && integerTraits<Vec32us, uint16_t, Vec32sb>());
+        static_assert(integerTraits<Vec4i, int32_t, Vec4ib>() && integerTraits<Vec4ui, uint32_t, Vec4ib>());
+        static_assert(integerTraits<Vec8i, int32_t, Vec8ib>() && integerTraits<Vec8ui, uint32_t, Vec8ib>());
+        static_assert(integerTraits<Vec16i, int32_t, Vec16ib>() && integerTraits<Vec16ui, uint32_t, Vec16ib>());
+        static_assert(integerTraits<Vec2q, int64_t, Vec2qb>() && integerTraits<Vec2uq, uint64_t, Vec2qb>());
+        static_assert(integerTraits<Vec4q, int64_t, Vec4qb>() && integerTraits<Vec4uq, uint64_t, Vec4qb>());
+        static_assert(integerTraits<Vec8q, int64_t, Vec8qb>() && integerTraits<Vec8uq, uint64_t, Vec8qb>());
         static_assert(dex::elements_v<bool> == 1);
         static_assert(dex::elements_v<float> == 1);
         static_assert(dex::elements_v<Vec4f> == 4);
@@ -68,6 +87,11 @@ namespace gfxmath_tests
         static_assert(std::is_same_v<dex::V4_t<float, 4>, dex::vec4f4>);
         static_assert(std::is_same_v<dex::RGB_t<float, 8>, dex::RGBf8>);
         static_assert(std::is_same_v<dex::RGBA_t<double, 4>, dex::RGBAd4>);
+        static_assert(dex::vectorN_impl::nextVectorSize<3, 8, 4, 1>() == 1);
+        static_assert(dex::vectorN_impl::nextVectorSize<0, 4, 1>() == 0);
+        static_assert(dex::vectorN_impl::tupleVectors<13, 8, 4, 1>() == 3);
+        static_assert(dex::vectorN_impl::tupleVectorScalars<13, 8, 4, 1>(2) == 1);
+        static_assert(dex::vectorN_impl::tupleVectorScalars<13, 8, 4, 1>(3) == 0);
         context.expect(true, "sequence and trait compile-time assertions");
     }
 
@@ -101,6 +125,7 @@ namespace gfxmath_tests
     void testVectorN(TestContext& context)
     {
         static_assert(V::size() == Size);
+        context.near(V::size(), Size, 0, "vectorN size reports the logical scalar count");
         std::array<T, Size> firstValues{};
         std::array<T, Size> secondValues{};
         T expectedSum = 0;

@@ -1,6 +1,10 @@
 #include "GfxMath.h"
 
 static_assert(dex::elements_v<float> == 1);
+#ifdef GFXMATH_EXPECTED_INSTRSET
+static_assert(INSTRSET == GFXMATH_EXPECTED_INSTRSET, "The compiler did not select the requested VCL ISA");
+static_assert(MAX_VECTOR_SIZE == 512, "The test suite requires all logical vector widths");
+#endif
 
 #if defined(GFXMATH_VEC2) || defined(GFXMATH_ALL)
 static_assert(dex::vec2f::size() == 2);

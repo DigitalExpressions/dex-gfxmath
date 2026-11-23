@@ -30,7 +30,8 @@ const float distance = position.length();
 ## Standalone tests
 
 The CMake/CTest build provides `gfxmath_tests` and `gfxmath_sign_tests`.
-It also builds `fastmath_tests` for x86. On Windows, run from this repository:
+It also builds `fastmath_tests` on x86 with SSE4.1 or newer. On Windows, run
+from this repository:
 
 ```powershell
 cmake -S . -B build-tests -A x64 `
@@ -58,14 +59,18 @@ CMake 3.24 or later supports `CMAKE_COMPILE_WARNING_AS_ERROR`.
 standard include locations, then fetches the pinned release candidate when
 `GFXMATH_FETCH_VECTORCLASS=ON` (the default).
 
-The x86 test targets use AVX2. ARM64 GfxMath targets use the default VCL2 XA64
+The x86 test targets default to AVX2 and can target SSE3 through native
+AVX-512 with `GFXMATH_X86_ISA`. ARM64 targets use the default VCL2 XA64
 NEON compatibility backend and omit the x86-only FastMath suite. Checks remain
 active in Release independently of `assert`/`NDEBUG`.
 
 `gfxmath.unit` exercises float/double and all supported packed member widths:
-float4/8/16 and double2/4/8. VCL emulates the largest widths on this target.
+float4/8/16 and double2/4/8. VCL emulates widths above the selected ISA.
 It also checks scalar vec3 storage, mixed-layout operations, and matrix
 multiplication with legacy, packed, and padded inputs.
+`gfxmath.reference` compares sampled results with the same checked-in numeric
+reference on every platform. See the [testing and benchmark guide](docs/testing.md)
+for the x64 SIMD matrix, Apple Silicon instructions, and reproducible timings.
 All advertised feature macros also have standalone compilation smoke targets.
 `gfxmath.sign` checks scalar and SIMD sign results, including signed zero and
 scalar NaN behavior. Its MSVC build treats narrowing warning C4244 as an error.

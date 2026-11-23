@@ -826,7 +826,8 @@ namespace dex
         auto xay = x + abs_y;
         auto ayx = abs_y - x;
         T r = select(x < 0, xay / ayx, -ayx / xay);
-        T angle = select(x < 0, Pi<Scalar_t<T>> * 0.75f, Pi<Scalar_t<T>> * 0.25f) + (0.1963f * r * r - 0.9817f) * r;
+        T angle = select(x < 0, T(Pi<Scalar_t<T>> * 0.75f), T(Pi<Scalar_t<T>> * 0.25f)) +
+                  (0.1963f * r * r - 0.9817f) * r;
         return select(y < 0, -angle, angle); // negate if in quad III or IV
     }
 
@@ -2610,7 +2611,7 @@ namespace dex
         {
             if constexpr (elements_v<T> == 1)
             {
-                return select(vcl == v.vcl, 1, 0);
+                return select(vcl == v.vcl, Vector_t<T, 4>(T(1)), Vector_t<T, 4>(T(0)));
             }
             else
             {
@@ -2624,7 +2625,7 @@ namespace dex
         {
             if constexpr (elements_v<T> == 1)
             {
-                return select(vcl > v.vcl, 1, 0);
+                return select(vcl > v.vcl, Vector_t<T, 4>(T(1)), Vector_t<T, 4>(T(0)));
             }
             else
             {
@@ -2638,7 +2639,7 @@ namespace dex
         {
             if constexpr (elements_v<T> == 1)
             {
-                return select(vcl >= v.vcl, 1, 0);
+                return select(vcl >= v.vcl, Vector_t<T, 4>(T(1)), Vector_t<T, 4>(T(0)));
             }
             else
             {
@@ -2652,7 +2653,7 @@ namespace dex
         {
             if constexpr (elements_v<T> == 1)
             {
-                return select(vcl < v.vcl, 1, 0);
+                return select(vcl < v.vcl, Vector_t<T, 4>(T(1)), Vector_t<T, 4>(T(0)));
             }
             else
             {
@@ -2666,7 +2667,7 @@ namespace dex
         {
             if constexpr (elements_v<T> == 1)
             {
-                return select(vcl <= v.vcl, 1, 0);
+                return select(vcl <= v.vcl, Vector_t<T, 4>(T(1)), Vector_t<T, 4>(T(0)));
             }
             else
             {
@@ -5023,7 +5024,7 @@ namespace dex
     template <typename T> forcedinline const ARGB<T> operator/(T a, const ARGB<T>& b) noexcept
     {
         auto m = T(1) / std::numeric_limits<Scalar_t<T>>::epsilon();
-        return select(b.vcl != 0, a / b.vcl, m);
+        return select(b.vcl != 0, a / b.vcl, Vector_t<T, 4>(m));
     }
 
     /// @brief Dependent ARGB helper for min; requires a compatible externally supplied ARGB definition.
@@ -5114,7 +5115,7 @@ namespace dex
     /// lane-wise.
     template <typename T> forcedinline const vec2<T> sign(const vec2<T>& a) noexcept
     {
-        return {select(a.x < 0, -1, 1), select(a.y < 0, -1, 1)};
+        return {select(a.x < T(0), T(-1), T(1)), select(a.y < T(0), T(-1), T(1))};
     }
     /// @brief Return numeric -1 for negative inputs and +1 otherwise, including zero, coordinate-wise and
     /// lane-wise.
@@ -5132,7 +5133,7 @@ namespace dex
     /// @brief Return numeric one where b >= a and zero otherwise, coordinate-wise and lane-wise.
     template <typename T> forcedinline const vec2<T> step(const vec2<T>& a, const vec2<T>& b) noexcept
     {
-        return {T(select(b.x < a.x, 0, 1)), T(select(b.y < a.y, 0, 1))};
+        return {select(b.x < a.x, T(0), T(1)), select(b.y < a.y, T(0), T(1))};
     }
     /// @brief Return numeric one where b >= a and zero otherwise, coordinate-wise and lane-wise.
     template <> forcedinline const vec2<float> step(const vec2<float>& a, const vec2<float>& b) noexcept
@@ -5322,7 +5323,7 @@ namespace dex
     /// lane-wise.
     template <typename T> forcedinline const vec4<T> sign(const vec4<T>& a) noexcept
     {
-        return {select(a.x < 0, -1, 1), select(a.y < 0, -1, 1), select(a.z < 0, -1, 1), select(a.w < 0, -1, 1)};
+        return {select(a.x < T(0), T(-1), T(1)), select(a.y < T(0), T(-1), T(1)), select(a.z < T(0), T(-1), T(1)), select(a.w < T(0), T(-1), T(1))};
     }
     /// @brief Return numeric -1 for negative inputs and +1 otherwise, including zero, coordinate-wise and
     /// lane-wise.
@@ -5340,7 +5341,7 @@ namespace dex
     /// @brief Return numeric one where b >= a and zero otherwise, coordinate-wise and lane-wise.
     template <typename T> forcedinline const vec4<T> step(const vec4<T>& a, const vec4<T>& b) noexcept
     {
-        return {T(select(b.x < a.x, 0, 1)), T(select(b.y < a.y, 0, 1)), T(select(b.z < a.z, 0, 1)), T(select(b.w < a.w, 0, 1))};
+        return {select(b.x < a.x, T(0), T(1)), select(b.y < a.y, T(0), T(1)), select(b.z < a.z, T(0), T(1)), select(b.w < a.w, T(0), T(1))};
     }
     /// @brief Return numeric one where b >= a and zero otherwise, coordinate-wise and lane-wise.
     template <> forcedinline const vec4<float> step(const vec4<float>& a, const vec4<float>& b) noexcept
@@ -5420,12 +5421,12 @@ namespace dex
     /// @brief Dependent ARGB helper for sign; requires a compatible externally supplied ARGB definition.
     template <typename T> forcedinline const ARGB<T> sign(const ARGB<T>& a) noexcept
     {
-        return select(a.vcl < 0, -1, 1);
+        return select(a.vcl < 0, Vector_t<T, 4>(T(-1)), Vector_t<T, 4>(T(1)));
     }
     /// @brief Dependent ARGB helper for step; requires a compatible externally supplied ARGB definition.
     template <typename T> forcedinline const ARGB<T> step(const ARGB<T>& a, const ARGB<T>& b) noexcept
     {
-        return select(b.vcl < a.vcl, 0, 1);
+        return select(b.vcl < a.vcl, Vector_t<T, 4>(T(0)), Vector_t<T, 4>(T(1)));
     }
     /// @brief Dependent ARGB helper for pow; requires a compatible externally supplied ARGB definition.
     template <typename T> forcedinline const ARGB<T> pow(const ARGB<T>& a, const ARGB<T>& b) noexcept

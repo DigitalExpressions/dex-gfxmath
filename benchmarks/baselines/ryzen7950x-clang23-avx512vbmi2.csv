@@ -1,0 +1,5 @@
+case,architecture,simd_profile,records,lanes,passes,samples,median_ns_per_item,min_ns_per_item,max_ns_per_item,checksum
+float_angles_and_root,x86,11,4096,1,256,7,2.918,2.916,2.973,13348.082261085510
+float16_normalize_and_dot,x86,11,4096,16,256,7,0.325,0.325,0.326,59319.791488647461
+matrix4f_inverse,x86,11,4096,1,256,7,1.679,1.676,1.715,5457.820428729057
+quatf_rotate,x86,11,4096,1,256,7,1.550,1.547,1.553,12230.812477767467

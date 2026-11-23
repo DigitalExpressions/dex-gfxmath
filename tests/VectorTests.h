@@ -165,7 +165,6 @@ namespace gfxmath_tests
         }
 
         std::mt19937 generator(0x67194u + dimensions);
-        std::uniform_real_distribution<double> distribution(-8.0, 8.0);
 
         for (int iteration = 0; iteration < 64; ++iteration)
         {
@@ -176,8 +175,8 @@ namespace gfxmath_tests
             {
                 for (int index = 0; index < laneCount<T>(); ++index)
                 {
-                    first[dimension][index] = static_cast<S>(distribution(generator));
-                    second[dimension][index] = static_cast<S>(distribution(generator));
+                    first[dimension][index] = static_cast<S>(uniform(generator, -8.0, 8.0));
+                    second[dimension][index] = static_cast<S>(uniform(generator, -8.0, 8.0));
 
                     if (std::abs(second[dimension][index]) < S(0.25))
                     {

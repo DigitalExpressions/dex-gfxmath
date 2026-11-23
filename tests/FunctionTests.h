@@ -264,14 +264,16 @@ namespace gfxmath_tests
             context.expect(dex::saturate(value) == std::clamp(value, 0, 1), "integer saturate");
             context.expect(dex::add(value) == value, "integer add identity");
 
-            for (int alignment = 1; alignment <= 17; ++alignment)
+            for (int alignment = -17; alignment <= 17; ++alignment)
             {
+                if (alignment == 0)
+                    continue;
                 const int down = int(std::floor(double(value) / alignment)) * alignment;
                 const int up = int(std::ceil(double(value) / alignment)) * alignment;
                 context.expect(dex::roundDownAligned(value, alignment) == down, "integer floor alignment handles negatives");
                 context.expect(dex::roundUpAligned(value, alignment) == up, "integer ceil alignment handles positive remainder");
 
-                if (value >= 0)
+                if (value >= 0 && alignment > 0)
                 {
                     context.expect(
                         dex::roundDownAligned(unsigned(value), unsigned(alignment)) == unsigned(down), "unsigned floor alignment");

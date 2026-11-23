@@ -1,9 +1,8 @@
 # GfxMath test coverage
 
 The standalone C++20 suite tests `Source/GfxMath.h` directly. It needs the C++
-standard library and Vector Class Library (VCL).
-`CMakeLists.txt` pins the optional VCL fetch; a local VCL directory can
-be supplied for offline builds. See [the build instructions](../README.md#standalone-tests).
+standard library and VCL2 XA64. CMake pins the dependency. The
+[testing guide](testing.md) covers ISA selection, reference checks, and current results.
 
 The main test executable enables `GFXMATH_ALL`. Separate translation units compile
 the header with no feature macro, each of `VEC2`, `VEC3`, `VEC4`, `VECN`, `RGBA`,
@@ -14,8 +13,8 @@ combination.
 ## Types and test oracles
 
 Unless a row below narrows the domain, floating tests instantiate `float`,
-`double`, `Vec4f`, `Vec8f`, `Vec16f`, `Vec2d`, `Vec4d`, and `Vec8d`. The normal test
-target uses AVX2; VCL emulates its largest vector types on that target. Distinct
+`double`, `Vec4f`, `Vec8f`, `Vec16f`, `Vec2d`, `Vec4d`, and `Vec8d`. ISA-specific
+x64 builds exercise both emulated and native 512-bit types. Distinct
 values in every component and lane detect accidental use of scalar overlays,
 the first lane, or the wrong vector width.
 
@@ -38,7 +37,7 @@ and canaries use zero tolerance or Boolean assertions.
 | --- | --- |
 | `always_false`, `FirstType`/`FirstType_t`; `seq::at_index`, `select`, `first`/`first_t`, `concatenate_t`, `modify_t`, `sum_v`, `partial_sum`/`partial_sum_v`, `seqToArray` | `UtilityTests.h`: compile-time checks of empty, partial, full, mixed integer-type, negative-element and transformed sequences. Internal `seq::impl` machinery is exercised through the public aliases. |
 | `E`, all pi and reciprocal/square-root constants, `Infinity`, `Min`, `Max`, `Epsilon` | `UtilityTests.h`: float/double references from `std::numbers`, `sqrt`, `exp`, and `numeric_limits`. `Min` means the smallest positive normal value. |
-| Native aliases and traits: `Float`, `Double`, `Vector`, `ScalarElement`, `Scalar`, `IntVector`, `UIntVector`, `FloatVector`, `BoolVector`, `NumElements`, their aliases, `V2_t`/`V3_t`/`V4_t`, RGB/RGBA aliases | `UtilityTests.h`: representative compile-time type mappings, unsupported widths, scalar types, masks, and lane counts; all eight floating types are instantiated throughout the suite. This is not an exhaustive assertion of every integer-vector trait specialization. |
+| Native aliases and traits: `Float`, `Double`, `Vector`, `ScalarElement`, `Scalar`, `IntVector`, `UIntVector`, `FloatVector`, `BoolVector`, `NumElements`, their aliases, `V2_t`/`V3_t`/`V4_t`, RGB/RGBA aliases | `UtilityTests.h`: supported and unsupported floating widths, scalar and mask mappings, and signed/unsigned integer scalar, mask, storage, and lane-count mappings at 128, 256, and 512 bits. |
 | Masked `horizontal_and`, `horizontal_or` | `UtilityTests.h`: every four-lane mask and requested mask; all eight-lane masks with zero, full, alternating and partial requests. Unselected bits are ignored; an empty AND request is true. |
 | `select`, `selectd`, `min`/`max` with 2/3/4 arguments, `clamp`, `saturate`, `trunc`, `fract`, `mod`, aligned rounding, `lerp`, `smoothstep`, `mix`, `hadd`, `dot`, `sign`, `step`, `add`, `modulo` | `FunctionTests.h`: scalar and native floating sweeps, negative values, boundaries, interpolation and extrapolation, plus signed/unsigned integer alignment checks. `fract` uses truncation and keeps negative fractions negative; `mod` agrees with `fmod`; `modulo` returns the fractional part of the quotient using floor. |
 | `copyArrayMasked`, `copyValueMasked` | `FunctionTests.h`: scalar and all native floating masks, all-false/all-true/mixed masks, unchanged unselected values, const array input, and leading/trailing guards. |
@@ -48,7 +47,7 @@ and canaries use zero tolerance or Boolean assertions.
 | `fast_shuffle`, `fast_partition_shuffle`, `mt19937_shuffle` | `FunctionTests.h`: empty, singleton and varied lengths; fixed-seed repeatability; permutation preservation; untouched suffixes; partial final partitions. Two-element fast shuffle must reach both permutations. Partition sizes at most one deliberately fall back to a full shuffle. |
 | `vec2`, `vec3`, `vec4` constructors, fields/channel aliases, arithmetic and compound arithmetic, numeric comparison operators and predicate methods | `VectorTests.h` and `VectorCoverageTests.h`: all dimensions and floating types, fixed-seed random finite inputs plus hand-selected boundaries and independent scalar oracles. Scalar-left operations, scalar-to-packed construction, and float/double conversions are covered. |
 | Vector geometry: dot/cross, sums/products, lengths, distances, normalization variants, limits, interpolation, random factories | `VectorTests.h`: independent formulas, zero normalization, coordinate axes, lane-varying inputs, vec4 W handling, component limits, seeded factory range/repeatability and unit-random length/range. |
-| All named coordinate/color/texture swizzles; templated `get`/`set`; component/lane insertion/extraction, split/concatenate | `SwizzleTests.h` and `VectorTests.h`: all 772 declared named swizzles across all eight floating types, indexed access, mutation, scalar/packed extraction, native low/high parts and recombination. |
+| All named coordinate/color/texture swizzles; templated `get`/`set`; component/lane insertion/extraction, split/concatenate | `SwizzleTests.h` and `VectorTests.h`: all 772 named swizzles across all eight floating types, plus all vec3 swizzles on the packed and padded scalar layouts. Tests also cover indexed access, mutation, extraction, native low/high parts and recombination. |
 | Auxiliary `getR10`/`getG10`/`getB10` and setters | `VectorTests.h`: every one of the 1024 exactly representable fractional codes in [0, 1), all floating types, independent channels and preserved XYZ components. |
 | Vector memory load/store, aligned forms, vec4 partial transfers | `VectorTests.h`: component and lane ordering, aligned storage and leading/trailing canaries; vec4 partial counts 0 through 4 and zero-filled unloaded components. |
 | Free vector `select`, `if_changeSign`, scalar-left arithmetic, min/max, horizontal and three-component reductions, `max1`, abs/exp/sqrt/sin/cos/pow/trunc/floor/ceil/sign/step/approx_sqrt | `VectorTests.h`: dimensions 2/3/4 with all floating types, standard scalar math references, unique maxima and ties, and numeric zero/one results. |
@@ -60,13 +59,12 @@ and canaries use zero tolerance or Boolean assertions.
 | `Matrix4`, `Matrix4f`, `Matrix4d` | `TransformTests.h` and `TransformCoverageTests.h`: scalar float/double matrices stored in native SIMD columns; native/vec3/vec4 column constructors and default fourth columns; copy/assignment; wrapped mutable column access; identities; every scalar/vec3/vec4 translation/rotation/scale factory and mutator overload; translation/diagonal-scale getters; arbitrary-axis rotation; Euler extraction; rotation alignment; composition; copied/in-place transpose; native/vector/matrix multiplication including supplied W and self-multiplication; point/direction/Cartesian transforms; four-lane packed Cartesian point/direction inputs; mixed float/double input precision; affine inverses, rigid inverses and homogeneous division. |
 | `Quaternion`, `Quatf`, `Quatd` | `TransformTests.h` and `TransformCoverageTests.h`: all floating types, vec4/component/copy construction, assignment and field aliases, axis-angle, copying/mutating normalization and exact normalization including zero, Hamilton multiplication, direct and SSE2 rotation paths, unit/general inverse, static/mutating slerp, endpoints, negative-target shortest path and near-equal fallback. |
 | `Map2D` | `UtilityTests.h`: default/explicit construction, initialization/reinitialization, row-major indexing, external-storage writes, checked bounds, zero dimensions, unchecked valid reads/writes and shared mutable out-of-range default. |
+| Dependent `ARGB<T>` free functions | `ArgbTests.h`: a test-only implementation of the documented consumer interface instantiates every helper for float and double, including numeric selection, zero division, reductions, math, and rounding. |
 
 ## Intentional limits and unavailable surface
 
-- `ARGB<T>` has only a forward declaration in this header. Its dependent free
-  functions cannot be instantiated without a separately supplied class
-  definition. The advertised ARGB macro is checked for standalone inclusion;
-  this suite does not invent or claim runtime coverage of an absent class.
+- The ARGB helper tests supply the consumer type. GfxMath declares the type
+  and provides the dependent operations.
 - Matrix element types are scalar float/double. `Matrix4<packed>` is not a
   supported layout. Inverse validation covers nonsingular affine transforms
   composed of translation, rotation and independent axis scale. General shear,
@@ -89,10 +87,10 @@ and canaries use zero tolerance or Boolean assertions.
   parameters and other undefined/assertion domains are not exercised as normal
   runtime calls. Compile-time sequence out-of-range diagnostics are not a
   negative-compilation test suite.
-- The routine acceptance target is Windows x64 with MSVC and AVX2. SSE-only,
-  ARM/sse2neon, non-MSVC builds and every feature-macro combination need separate
-  platform validation. Native AVX-512 compile probes can complement the AVX2
-  suite but are distinct from a complete platform matrix.
+- Coverage counters measure executable code in a specific compiler/ISA build.
+  Constant-evaluated template helpers also have compile-time assertions.
+  Feature-macro smoke builds check standalone inclusion. See the
+  [testing guide](testing.md) for executed ISA configurations and the ARM64 recipe.
 - `Source/FastMath.h` is a separate API tested by `fastmath.unit`, outside
   `gfxmath.unit`. See its [API reference](fastmath-api.md) and
   [coverage inventory](fastmath-test-coverage.md).

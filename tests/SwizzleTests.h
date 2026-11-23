@@ -16,22 +16,9 @@ namespace gfxmath_tests
             0, message);
     }
 
-    template <typename T> void testSwizzles(TestContext& context)
+    template <typename T, dex::vec3_layout Layout> void testVec3Swizzles(TestContext& context)
     {
-        const auto value2 = makeVector<dex::vec2<T>>(
-            [](int d, int i)
-            {
-                return d * 100 + i + 1;
-            });
-        expectSwizzle(context, value2.xy(), {0, 1}, "vec2 swizzle xy");
-        expectSwizzle(context, value2.uu(), {0, 0}, "vec2 swizzle uu");
-        expectSwizzle(context, value2.xx(), {0, 0}, "vec2 swizzle xx");
-        expectSwizzle(context, value2.uv(), {0, 1}, "vec2 swizzle uv");
-        expectSwizzle(context, value2.yx(), {1, 0}, "vec2 swizzle yx");
-        expectSwizzle(context, value2.vu(), {1, 0}, "vec2 swizzle vu");
-        expectSwizzle(context, value2.yy(), {1, 1}, "vec2 swizzle yy");
-        expectSwizzle(context, value2.vv(), {1, 1}, "vec2 swizzle vv");
-        const auto value3 = makeVector<dex::vec3<T>>(
+        const auto value3 = makeVector<dex::vec3<T, Layout>>(
             [](int d, int i)
             {
                 return d * 100 + i + 1;
@@ -144,6 +131,24 @@ namespace gfxmath_tests
         expectSwizzle(context, value3.zzz(), {2, 2, 2}, "vec3 swizzle zzz");
         expectSwizzle(context, value3.bbb(), {2, 2, 2}, "vec3 swizzle bbb");
         expectSwizzle(context, value3.www(), {2, 2, 2}, "vec3 swizzle www");
+    }
+
+    template <typename T> void testSwizzles(TestContext& context)
+    {
+        const auto value2 = makeVector<dex::vec2<T>>(
+            [](int d, int i)
+            {
+                return d * 100 + i + 1;
+            });
+        expectSwizzle(context, value2.xy(), {0, 1}, "vec2 swizzle xy");
+        expectSwizzle(context, value2.uu(), {0, 0}, "vec2 swizzle uu");
+        expectSwizzle(context, value2.xx(), {0, 0}, "vec2 swizzle xx");
+        expectSwizzle(context, value2.uv(), {0, 1}, "vec2 swizzle uv");
+        expectSwizzle(context, value2.yx(), {1, 0}, "vec2 swizzle yx");
+        expectSwizzle(context, value2.vu(), {1, 0}, "vec2 swizzle vu");
+        expectSwizzle(context, value2.yy(), {1, 1}, "vec2 swizzle yy");
+        expectSwizzle(context, value2.vv(), {1, 1}, "vec2 swizzle vv");
+        testVec3Swizzles<T, dex::vec3_layout::legacy>(context);
         const auto value4 = makeVector<dex::vec4<T>>(
             [](int d, int i)
             {

@@ -30,6 +30,13 @@ namespace gfxmath_tests
 {
     using math_tests::TestContext;
 
+    // mt19937 is standardized, while uniform_real_distribution's mapping is library-specific.
+    inline double uniform(std::mt19937& generator, double lo, double hi)
+    {
+        const double unit = static_cast<double>(generator()) * 0x1p-32;
+        return lo + (hi - lo) * unit;
+    }
+
     template <typename T> using Scalar = dex::Scalar_t<T>;
 
     template <typename T> constexpr int laneCount()

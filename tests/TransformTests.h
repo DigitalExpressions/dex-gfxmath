@@ -165,18 +165,17 @@ namespace gfxmath_tests
             error, "general homogeneous multiply");
 
         std::mt19937 generator(0x75143u);
-        std::uniform_real_distribution<double> position(-12, 12);
-        std::uniform_real_distribution<double> angles(-3, 3);
+        const auto position = [&] { return uniform(generator, -12, 12); };
 
         for (int iteration = 0; iteration < 80; ++iteration)
         {
-            const T tx = static_cast<T>(position(generator));
-            const T ty = static_cast<T>(position(generator));
-            const T tz = static_cast<T>(position(generator));
-            const T angle = static_cast<T>(angles(generator));
-            const T sx = T(0.5 + std::abs(position(generator)));
-            const T sy = T(0.5 + std::abs(position(generator)));
-            const T sz = T(0.5 + std::abs(position(generator)));
+            const T tx = static_cast<T>(position());
+            const T ty = static_cast<T>(position());
+            const T tz = static_cast<T>(position());
+            const T angle = static_cast<T>(uniform(generator, -3, 3));
+            const T sx = T(0.5 + std::abs(position()));
+            const T sy = T(0.5 + std::abs(position()));
+            const T sz = T(0.5 + std::abs(position()));
             const T sine = std::sin(-angle);
             const T cosine = std::cos(angle);
             const ReferenceMatrix rotation{{{cosine, -sine, 0, 0}, {sine, cosine, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}}};
@@ -286,6 +285,10 @@ namespace gfxmath_tests
                 return projected[d] / projected[3];
             },
             error, "projective vec4 homogeneous divide");
+
+        const Matrix reflected(V4(-2, 2, 0, 0), V4(3, 3, 0, 0), V4(0, 0, 4, 0), V4(1, 2, -1, 1));
+        expectMatrix(context, reflected.inversed(), referenceInverse(referenceMatrix(reflected)),
+            error, "affine inverse with reflection and orthogonal scaled basis");
     }
 
     template <typename T> void testMatrixRotationUtilities(TestContext& context)
@@ -376,7 +379,7 @@ namespace gfxmath_tests
             context.near(determinant, 1, error, "alignment is a proper rotation");
             Matrix homogeneousAlignment = Matrix::identity();
             homogeneousAlignment.rotationAlign4(V4(targets[index], 12), V4(sources[index], -20));
-            expectMatrix(context, homogeneousAlignment, observed, 0, "vec4 alignment ignores both w components");
+            context.expect(referenceMatrix(homogeneousAlignment) == observed, "vec4 alignment ignores both w components");
         }
     }
 

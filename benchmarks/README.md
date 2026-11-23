@@ -1,5 +1,8 @@
 # Vec3 layout benchmark
 
+For the broader GfxMath benchmark and same-machine comparison workflow, see
+the [testing guide](../docs/testing.md#performance-comparisons).
+
 The benchmark compares the legacy, packed, and padded vec3 layouts in both
 float and double precision. Each layout gets the same XYZ input values.
 
@@ -21,6 +24,8 @@ up to about 820 MiB of buffer storage. The benchmark runs on a single thread.
 AMD Ryzen 9 7950X, Windows x64, Release, MSVC 19.52 and Clang 22.1.3
 (`clang-cl`). Both compiler commands used `/O2 /Ob2 /arch:AVX2`.
 With this version of `clang-cl`, `/O2` selected LLVM `-O3`.
+These measurements used upstream Vector Class Library revision
+`08959ebe` before the move to VCL2 XA64.
 
 Auto-vectorization was enabled on both compilers. The dot product and
 indexed distance use ordinary XYZ arithmetic, leaving SIMD selection to the

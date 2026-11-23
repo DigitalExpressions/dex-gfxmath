@@ -4,16 +4,28 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace math_tests
 {
+    inline bool withinTolerance(long double actual, long double expected, long double tolerance)
+    {
+        return (std::isnan(expected) && std::isnan(actual)) || actual == expected ||
+               (std::isfinite(actual) && std::isfinite(expected) &&
+                   std::abs(actual - expected) <= tolerance * std::max(1.0L, std::abs(expected)));
+    }
+
     class TestContext
     {
     public:
+        using NumericObserver = std::function<void(std::string_view, std::string_view, double, double, double)>;
+        explicit TestContext(NumericObserver observer = {}) : observe(std::move(observer)) {}
+
         void group(std::string_view name) { currentGroup = name; }
 
         void expect(bool condition, std::string_view message)
@@ -41,11 +53,10 @@ namespace math_tests
             const long double observed = static_cast<long double>(actual);
             const long double reference = static_cast<long double>(expected);
             const long double limit = static_cast<long double>(tolerance);
-            const bool equal = (std::isnan(reference) && std::isnan(observed)) || observed == reference ||
-                               (std::isfinite(observed) && std::isfinite(reference) &&
-                                   std::abs(observed - reference) <= limit * std::max(1.0L, std::abs(reference)));
-
-            expect(equal, message);
+            expect(withinTolerance(observed, reference, limit), message);
+            if (observe)
+                observe(currentGroup, message, static_cast<double>(observed), static_cast<double>(reference),
+                    static_cast<double>(limit));
         }
 
         int finish() const
@@ -55,6 +66,7 @@ namespace math_tests
         }
 
     private:
+        NumericObserver observe;
         std::string currentGroup;
         std::size_t checks = 0;
         std::size_t failures = 0;
