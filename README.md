@@ -11,8 +11,9 @@ The references explain signatures, storage and lane conventions, preconditions,
 approximation domains, and examples. See also the
 [wide member vector migration notes](docs/wide-member-vectors.md).
 
-`GfxMath.h` requires C++20 and the
-[Vector Class Library](https://github.com/vectorclass/version2). Define the
+`GfxMath.h` requires C++20 and
+[VCL2 XA64](https://github.com/DigitalExpressions/vcl2-xa64), which selects the
+x86 or ARM64 backend for the compiler target. Define the
 required `GFXMATH_*` feature macros before including it; `GFXMATH_ALL` enables
 all implemented features. `FastMath.h` is independent of GfxMath and VCL and
 uses x86 intrinsics. Its API reference specifies the instruction-set and
@@ -28,13 +29,11 @@ const float distance = position.length();
 
 ## Standalone tests
 
-The CMake/CTest build provides `gfxmath_tests`, `gfxmath_sign_tests`, and `fastmath_tests`. On Windows,
-run from this repository:
+The CMake/CTest build provides `gfxmath_tests` and `gfxmath_sign_tests`.
+It also builds `fastmath_tests` for x86. On Windows, run from this repository:
 
 ```powershell
 cmake -S . -B build-tests -A x64 `
-    -DGFXMATH_VECTORCLASS_DIR=C:/path/to/vectorclass `
-    -DGFXMATH_FETCH_VECTORCLASS=OFF `
     -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
 cmake --build build-tests --config Debug --parallel 2
 ctest --test-dir build-tests -C Debug --output-on-failure
@@ -47,8 +46,6 @@ toolset installed:
 
 ```powershell
 cmake -S . -B build/tests-clang -A x64 -T ClangCL `
-    -DGFXMATH_VECTORCLASS_DIR=C:/path/to/vectorclass `
-    -DGFXMATH_FETCH_VECTORCLASS=OFF `
     -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
 cmake --build build/tests-clang --config Release --parallel 2
 ctest --test-dir build/tests-clang -C Release --output-on-failure
@@ -56,12 +53,13 @@ ctest --test-dir build/tests-clang -C Release --output-on-failure
 
 CMake 3.24 or later supports `CMAKE_COMPILE_WARNING_AS_ERROR`.
 
-`GFXMATH_VECTORCLASS_DIR` must contain `vectorclass.h`. If omitted, CMake searches
-the sibling `vectorclass` directory and standard include locations. Otherwise,
-with `GFXMATH_FETCH_VECTORCLASS=ON`
-(the default), it fetches VCL at the pinned commit in `CMakeLists.txt`.
+`GFXMATH_VECTORCLASS_DIR` can point to a local VCL2 XA64 checkout containing
+`vcl2_xa64.h`. If omitted, CMake searches the sibling `vcl2-xa64` directory and
+standard include locations, then fetches the pinned release candidate when
+`GFXMATH_FETCH_VECTORCLASS=ON` (the default).
 
-All test executables target AVX2 and require an AVX2-capable CPU. Checks remain
+The x86 test targets use AVX2. ARM64 GfxMath targets use the default VCL2 XA64
+NEON compatibility backend and omit the x86-only FastMath suite. Checks remain
 active in Release independently of `assert`/`NDEBUG`.
 
 `gfxmath.unit` exercises float/double and all supported packed member widths:

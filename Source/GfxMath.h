@@ -67,21 +67,7 @@
 #endif
 #endif
 
-#if __arm64__
-#include <sse2neon.h>
-// limit to 128byte, since we want to use ARM-neon
-#define MAX_VECTOR_SIZE 512
-//limit to sse4.2, sse2neon does not have any AVX instructions ( so far )
-#define INSTRSET 6
-//define unknown function
-#define _mm_getcsr() 1
-//simulate header included
-#define __X86INTRIN_H
-#endif
-
-#include "vectorclass.h"
-#include "vectormath_exp.h"
-#include "vectormath_trig.h"
+#include <vcl2_xa64.h>
 
 // RGB and RGBA aliases use the corresponding three- and four-component vectors.
 #if defined(GFXMATH_RGBA)
@@ -442,7 +428,7 @@ namespace dex
     };
     template <> struct IntVector<Vec2db> { using type = int64_t; };
 // Compact AVX512 masks share the float mask specializations above.
-#if INSTRSET < 10
+#if VCL_ARCH_ARM64 || INSTRSET < 10
     template <> struct IntVector<Vec4db>
     {
         using type = int64_t;
@@ -569,7 +555,7 @@ namespace dex
         using ARRAY = uint32_t*;
     };
 // Compact AVX512 masks share the float mask specializations above.
-#if INSTRSET < 10
+#if VCL_ARCH_ARM64 || INSTRSET < 10
     template <> struct BoolVector<Vec4db>
     {
         using type = Vec4qb;
@@ -6747,29 +6733,14 @@ namespace dex
         /// @brief Transpose all matrix entries in place and return this matrix.
         forcedinline Matrix4& transpose()
         {
-            if constexpr (std::is_same_v<T, float>)
-            {
-                auto tmp0 = _mm_shuffle_ps((col0), (col1), 0x44);
-                auto tmp2 = _mm_shuffle_ps((col0), (col1), 0xEE);
-                auto tmp1 = _mm_shuffle_ps((col2), (col3), 0x44);
-                auto tmp3 = _mm_shuffle_ps((col2), (col3), 0xEE);
-                (col0) = _mm_shuffle_ps(tmp0, tmp1, 0x88);
-                (col1) = _mm_shuffle_ps(tmp0, tmp1, 0xDD);
-                (col2) = _mm_shuffle_ps(tmp2, tmp3, 0x88);
-                (col3) = _mm_shuffle_ps(tmp2, tmp3, 0xDD);
-            }
-
-            if constexpr (std::is_same_v<T, double>)
-            {
-                auto tmp0 = _mm256_shuffle_pd((col0), (col1), 0x0);
-                auto tmp2 = _mm256_shuffle_pd((col0), (col1), 0xF);
-                auto tmp1 = _mm256_shuffle_pd((col2), (col3), 0x0);
-                auto tmp3 = _mm256_shuffle_pd((col2), (col3), 0xF);
-                (col0) = _mm256_permute2f128_pd(tmp0, tmp1, 0x20);
-                (col1) = _mm256_permute2f128_pd(tmp2, tmp3, 0x20);
-                (col2) = _mm256_permute2f128_pd(tmp0, tmp1, 0x31);
-                (col3) = _mm256_permute2f128_pd(tmp2, tmp3, 0x31);
-            }
+            const auto xy01 = blend4<0, 1, 4, 5>(col0, col1);
+            const auto xy23 = blend4<0, 1, 4, 5>(col2, col3);
+            const auto zw01 = blend4<2, 3, 6, 7>(col0, col1);
+            const auto zw23 = blend4<2, 3, 6, 7>(col2, col3);
+            col0 = blend4<0, 2, 4, 6>(xy01, xy23);
+            col1 = blend4<1, 3, 5, 7>(xy01, xy23);
+            col2 = blend4<0, 2, 4, 6>(zw01, zw23);
+            col3 = blend4<1, 3, 5, 7>(zw01, zw23);
             return *this;
         }
 
@@ -6917,7 +6888,7 @@ namespace dex
         template <int First>
         static forcedinline Vector_t<T, 8> gatherTransformCoordinates(Vector_t<T, 8> a, Vector_t<T, 8> b) noexcept
         {
-#if defined(_MSC_VER) && !defined(__clang__) && _MSC_VER >= 1950 && INSTRSET < 9
+#if defined(_MSC_VER) && !defined(__clang__) && _MSC_VER >= 1950 && !VCL_ARCH_ARM64 && INSTRSET < 9
             // MSVC 19.5x rejects the dependent array bound in VCL's emulated Vec8d blend.
             if constexpr (std::is_same_v<T, double>)
             {
@@ -7106,7 +7077,7 @@ namespace dex
             return Quaternion(conj / vec4<T>(l2));
         }
 
-        //Convert quaternion to 3×3 rotation matrix (aligned with VCL usage)
+        //Convert quaternion to 3Ã—3 rotation matrix (aligned with VCL usage)
         //Mat3f toRotationMatrix() const
         // {
         //

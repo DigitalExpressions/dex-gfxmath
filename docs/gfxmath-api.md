@@ -30,9 +30,9 @@ that differs from similarly named APIs in other math libraries. See the
 
 ## Including the header and selecting features
 
-Put the directory containing `GfxMath.h` and the VCL include directory on your
-include path. VCL's `vectorclass.h`, `vectormath_exp.h`, and
-`vectormath_trig.h` are required. Choose feature macros before the first include
+Link the CMake target `DEXGfxMath` or put the directory containing `GfxMath.h`
+and the VCL2 XA64 checkout containing `vcl2_xa64.h` on your include path.
+Choose feature macros before the first include
 in a translation unit; `#pragma once` prevents a second include from adding
 features later.
 
