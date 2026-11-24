@@ -148,11 +148,12 @@ namespace gfxmath_tests
                 return std::numeric_limits<double>::infinity();
             if (token == "-inf")
                 return -std::numeric_limits<double>::infinity();
-            std::istringstream number{std::string(token)};
-            number.imbue(std::locale::classic());
             double value{};
-            if (!(number >> value) || !number.eof())
-                throw std::runtime_error("Invalid numeric result in GfxMath reference row");
+            const auto end = token.data() + token.size();
+            // Stream extraction can reject representable subnormals as underflow on libc++.
+            const auto result = std::from_chars(token.data(), end, value);
+            if (result.ec != std::errc{} || result.ptr != end)
+                throw std::runtime_error("Invalid numeric result in GfxMath reference row: " + std::string(token));
             return value;
         }
 
